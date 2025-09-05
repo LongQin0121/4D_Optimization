@@ -1,23 +1,177 @@
 from bada_dis_time import calculate_complete_descent_profile
 import Utility
-import pickle
-import os
 
-def find_profile_for_rta(target_rta, tolerance=10):
+def calculate_eta_range(cruise_fl=370, target_fl=30, aircraft_mass=60000, 
+                        ac_model="A320-232", standard_route_length=200):
     """
-    快速计算匹配指定RTA的飞行剖面
+    计算最早到达时间(ETAmin)和最晚到达时间(ETAmax)
+    
+    参数:
+        cruise_fl (int): 巡航飞行高度
+        target_fl (int): 目标飞行高度
+        aircraft_mass (int): 飞机质量(千克)
+        ac_model (str): 飞机型号
+        standard_route_length (float): 标准航线长度(海里)
+    
+    返回:
+        tuple: (eta_min, eta_max, eta_min_profile, eta_max_profile)
+    """
+    print("\n计算ETAmin和ETAmax中...\n")
+    
+    # 已知的最快飞行时间配置
+    fast_config = {
+        'mach': 0.80, 
+        'high_cas': 310, 
+        'low_cas': 0, 
+        'low_cas_fl': 0, 
+        'description': '不使用低速CAS'
+    }
+    
+    # 已知的最慢飞行时间配置
+    slow_config = {
+        'mach': 0.73, 
+        'high_cas': 245, 
+        'low_cas': 220, 
+        'low_cas_fl': 150, 
+        'description': 'FL150低速转换'
+    }
+    
+    # 计算最快配置
+    descent_mach = fast_config['mach']
+    high_cas = fast_config['high_cas']
+    low_cas = fast_config['low_cas']
+    low_cas_fl = fast_config['low_cas_fl']
+    description = fast_config['description']
+    
+    # 计算巡航真空速和地速
+    tas = Utility.mach2tas_kt(flight_level=cruise_fl, mach=descent_mach, delta_temp=0)
+    gs = round(tas, 1)
+    
+    try:
+        # 计算下降剖面
+        _, Param, _, df, _ = calculate_complete_descent_profile(
+            cruise_fl=cruise_fl,
+            target_fl=target_fl,
+            aircraft_mass=aircraft_mass,
+            descent_mach=descent_mach,
+            high_cas=high_cas,
+            ac_model=ac_model,
+            low_cas=low_cas,
+            low_cas_fl=low_cas_fl,
+            print_details=False
+        )
+        
+        # 提取关键参数
+        descent_distance = Param['Descent Distance (nm)']
+        descent_time = Param['Descent Time (s)']
+        
+        # 计算总飞行时间
+        cruise_distance = standard_route_length - descent_distance
+        cruise_time = cruise_distance / gs * 3600
+        eta_min = cruise_time + descent_time
+        
+        eta_min_profile = {
+            'mach': descent_mach,
+            'high_cas': high_cas,
+            'low_cas': low_cas,
+            'low_cas_fl': low_cas_fl,
+            'low_cas_desc': description,
+            'descent_distance': descent_distance,
+            'descent_time': descent_time,
+            'cruise_time': cruise_time,
+            'total_time_sec': eta_min,
+            'total_time_min': eta_min / 60
+        }
+    except Exception as e:
+        print(f"计算最早到达时间出错: {e}")
+        eta_min = None
+        eta_min_profile = None
+    
+    # 计算最慢配置
+    descent_mach = slow_config['mach']
+    high_cas = slow_config['high_cas']
+    low_cas = slow_config['low_cas']
+    low_cas_fl = slow_config['low_cas_fl']
+    description = slow_config['description']
+    
+    # 计算巡航真空速和地速
+    tas = Utility.mach2tas_kt(flight_level=cruise_fl, mach=descent_mach, delta_temp=0)
+    gs = round(tas, 1)
+    
+    try:
+        # 计算下降剖面
+        _, Param, _, df, _ = calculate_complete_descent_profile(
+            cruise_fl=cruise_fl,
+            target_fl=target_fl,
+            aircraft_mass=aircraft_mass,
+            descent_mach=descent_mach,
+            high_cas=high_cas,
+            ac_model=ac_model,
+            low_cas=low_cas,
+            low_cas_fl=low_cas_fl,
+            print_details=False
+        )
+        
+        # 提取关键参数
+        descent_distance = Param['Descent Distance (nm)']
+        descent_time = Param['Descent Time (s)']
+        
+        # 计算总飞行时间
+        cruise_distance = standard_route_length - descent_distance
+        cruise_time = cruise_distance / gs * 3600
+        eta_max = cruise_time + descent_time
+        
+        eta_max_profile = {
+            'mach': descent_mach,
+            'high_cas': high_cas,
+            'low_cas': low_cas,
+            'low_cas_fl': low_cas_fl,
+            'low_cas_desc': description,
+            'descent_distance': descent_distance,
+            'descent_time': descent_time,
+            'cruise_time': cruise_time,
+            'total_time_sec': eta_max,
+            'total_time_min': eta_max / 60
+        }
+    except Exception as e:
+        print(f"计算最晚到达时间出错: {e}")
+        eta_max = None
+        eta_max_profile = None
+    
+    if eta_min is not None and eta_max is not None:
+        print("\n======= ETA范围 =======")
+        print(f"最早到达时间(ETAmin): {eta_min:.2f}秒 ({eta_min/60:.2f}分钟)")
+        print(f"配置: Mach {eta_min_profile['mach']}, High CAS {eta_min_profile['high_cas']}, {eta_min_profile['low_cas_desc']}")
+        
+        print(f"\n最晚到达时间(ETAmax): {eta_max:.2f}秒 ({eta_max/60:.2f}分钟)")
+        print(f"配置: Mach {eta_max_profile['mach']}, High CAS {eta_max_profile['high_cas']}, {eta_max_profile['low_cas_desc']}")
+        
+        print(f"\nETA范围: {eta_max - eta_min:.2f}秒 ({(eta_max - eta_min)/60:.2f}分钟)")
+
+        print(f"\nETA: [{eta_min:.1f} - {eta_max:.1f}]")
+        print("======================")
+    
+    return eta_min, eta_max, eta_min_profile, eta_max_profile
+
+
+
+def find_profile_for_rta(target_rta, tolerance=10, cruise_fl=370, target_fl=30, 
+                        aircraft_mass=60000, ac_model="A320-232", standard_route_length=200):
+    """
+    查找与指定RTA匹配的飞行剖面
     
     参数:
         target_rta (float): 目标所需到达时间(秒)
         tolerance (float): 与RTA的允许误差(秒)
-    """
-    # 固定参数
-    cruise_fl = 370
-    target_fl = 30
-    aircraft_mass = 60000
-    ac_model = "A320-232"
-    standard_route_length = 200  # 海里
+        cruise_fl (int): 巡航飞行高度
+        target_fl (int): 目标飞行高度
+        aircraft_mass (int): 飞机质量(千克)
+        ac_model (str): 飞机型号
+        standard_route_length (float): 标准航线长度(海里)
     
+    返回:
+        tuple: (best_profile, param, df) - 最佳匹配的飞行剖面, 参数详情, 完整的下降数据
+    """
     # 低速组 - 测试全套低速配置
     low_mach_cas_groups = [
         {
@@ -129,7 +283,8 @@ def find_profile_for_rta(target_rta, tolerance=10):
                 
                 # 计算完整下降剖面
                 try:
-                    _, Param, _, df, _ = calculate_complete_descent_profile(
+                    # 保存完整的返回结果
+                    complete_result = calculate_complete_descent_profile(
                         cruise_fl=cruise_fl,
                         target_fl=target_fl,
                         aircraft_mass=aircraft_mass,
@@ -140,6 +295,9 @@ def find_profile_for_rta(target_rta, tolerance=10):
                         low_cas_fl=low_cas_fl,
                         print_details=False
                     )
+                    
+                    # 解包返回的结果
+                    _, Param, _, df, _ = complete_result
                     
                     # 提取关键下降参数
                     descent_distance = Param['Descent Distance (nm)']
@@ -153,7 +311,7 @@ def find_profile_for_rta(target_rta, tolerance=10):
                     # 计算与目标RTA的差值
                     diff = abs(total_flight_time - target_rta)
                     
-                    # 将结果添加到列表
+                    # 将结果添加到列表，包括完整的参数和数据框
                     results.append({
                         'mach': descent_mach,
                         'high_cas': high_cas,
@@ -165,7 +323,9 @@ def find_profile_for_rta(target_rta, tolerance=10):
                         'cruise_time': cruise_time,
                         'total_time_sec': total_flight_time,
                         'total_time_min': total_flight_time / 60,
-                        'diff_sec': diff
+                        'diff_sec': diff,
+                        'param': Param,    # 保存完整参数
+                        'df': df           # 保存完整下降数据
                     })
                     
                 except Exception as e:
@@ -193,7 +353,8 @@ def find_profile_for_rta(target_rta, tolerance=10):
         print(f"- 总飞行时间: {best_match['total_time_sec']:.2f}秒 ({best_match['total_time_min']:.2f}分钟)")
         print(f"- 与目标RTA差值: {best_match['diff_sec']:.2f}秒")
         
-        return best_match
+        # 返回最佳匹配的配置以及详细的参数和数据框
+        return best_match, best_match['param'], best_match['df']
     else:
         # 找出最接近的配置
         results.sort(key=lambda x: x['diff_sec'])
@@ -206,12 +367,5 @@ def find_profile_for_rta(target_rta, tolerance=10):
         print(f"- 低速配置: {closest_match['low_cas_desc']} (low_cas={closest_match['low_cas']}, low_cas_fl={closest_match['low_cas_fl']})")
         print(f"- 总飞行时间: {closest_match['total_time_sec']:.2f}秒 ({closest_match['total_time_min']:.2f}分钟)")
         
-        return closest_match
-
-# 使用示例
-if __name__ == "__main__":
-    # 设置目标RTA
-    target_rta = 1700  # 目标RTA，单位秒
-    
-    # 查找匹配的飞行剖面
-    best_profile = find_profile_for_rta(target_rta)
+        # 返回最接近的配置以及详细的参数和数据框
+        return closest_match, closest_match['param'], closest_match['df']
