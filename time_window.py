@@ -18,8 +18,12 @@ import A320
 eta_min, eta_max, eta_min_profile, eta_max_profile = A320.calculate_eta_range(cruise_fl=370, target_fl=30, aircraft_mass=60000, 
                         ac_model="A320-232", standard_route_length=200)
 
-best_profile = A320.find_profile_for_rta(
-    target_rta=1850,             # 目标到达时间1850秒
+# GOT windoW
+
+
+# closest_match, closest_match['param'], closest_match['df']
+best_profile  = A320.find_profile_for_rta(
+    target_rta=1677.87,             # 目标到达时间1850秒
     tolerance=10,                # 15秒容忍误差
     cruise_fl=370,               # 巡航高度FL380
     target_fl=30,                # 目标高度FL20
@@ -27,8 +31,23 @@ best_profile = A320.find_profile_for_rta(
     ac_model="A320-232",         # 飞机型号
     standard_route_length=200    # 220海里的航线长度
 )
+##  closest_match['param'], closest_match['df']
+##
+print(best_profile['df'].columns)
+# print(best_profile['df']['Alt-Dist Ratio(ft/nm)'])
 
-print(best_profile)
+
+cols = [
+    'FL', 'Altitude(ft)', 'Speed Mode', 'Mach', 'CAS(kt)', 'TAS(kt)',
+    'Descent Gradient(%)', 'Alt-Dist Ratio(ft/nm)',
+    'Cumulative Distance(nm)', 'Cumulative Time(s)', 'Cumulative Fuel(kg)'
+]
+
+print(best_profile['df'][cols])
+
+
+
+
 # # Calculate cruise true airspeed and ground speed (assuming zero wind)
 # tas = Utility.mach2tas_kt(flight_level=cruise_fl, mach=descent_mach, delta_temp=0)
 # gs = round(tas, 1)

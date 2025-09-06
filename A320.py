@@ -52,11 +52,11 @@ def calculate_eta_range(cruise_fl=370, target_fl=30, aircraft_mass=60000,
         _, Param, _, df, _ = calculate_complete_descent_profile(
             cruise_fl=cruise_fl,
             target_fl=target_fl,
-            aircraft_mass=aircraft_mass,
-            descent_mach=descent_mach,
-            high_cas=high_cas,
+            aircraft_mass=aircraft_mass,  # 
+            descent_mach=descent_mach,   # 0.8
+            high_cas=high_cas,          # 310
             ac_model=ac_model,
-            low_cas=low_cas,
+            low_cas=low_cas,      # 
             low_cas_fl=low_cas_fl,
             print_details=False
         )
@@ -107,8 +107,8 @@ def calculate_eta_range(cruise_fl=370, target_fl=30, aircraft_mass=60000,
             descent_mach=descent_mach,
             high_cas=high_cas,
             ac_model=ac_model,
-            low_cas=low_cas,
-            low_cas_fl=low_cas_fl,
+            low_cas=low_cas,    #
+            low_cas_fl=low_cas_fl, #
             print_details=False
         )
         
@@ -354,7 +354,7 @@ def find_profile_for_rta(target_rta, tolerance=10, cruise_fl=370, target_fl=30,
         print(f"- 与目标RTA差值: {best_match['diff_sec']:.2f}秒")
         
         # 返回最佳匹配的配置以及详细的参数和数据框
-        return best_match, best_match['param'], best_match['df']
+        return best_match  #, best_match['param'], best_match['df']
     else:
         # 找出最接近的配置
         results.sort(key=lambda x: x['diff_sec'])
@@ -368,4 +368,10 @@ def find_profile_for_rta(target_rta, tolerance=10, cruise_fl=370, target_fl=30,
         print(f"- 总飞行时间: {closest_match['total_time_sec']:.2f}秒 ({closest_match['total_time_min']:.2f}分钟)")
         
         # 返回最接近的配置以及详细的参数和数据框
-        return closest_match, closest_match['param'], closest_match['df']
+        return closest_match
+    
+
+
+
+eta_min, eta_max, eta_min_profile, eta_max_profile = calculate_eta_range(cruise_fl=370, target_fl=30, aircraft_mass=60000, 
+                        ac_model="A320-232", standard_route_length=200)

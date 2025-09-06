@@ -21,6 +21,7 @@ def initialize_aircraft_model(ac_model):
     bada4 = BADA4(AC)
     return bada4
 
+
 def determine_speed_profile(flight_level, crossover_fl, descent_mach, high_cas, 
                            low_cas, low_cas_fl, constant_cas):
     """Determine speed profile parameters for a given flight level"""
@@ -30,25 +31,33 @@ def determine_speed_profile(flight_level, crossover_fl, descent_mach, high_cas,
         speed_mode = f"Mach {descent_mach}"
         flight_evolution = "constM"
         target_cas = None
-    elif flight_level >= low_cas_fl:
+    elif low_cas_fl is not None and flight_level >= low_cas_fl:
         # Use high altitude CAS
         M = None  # Will be calculated later
         speed_mode = f"CAS {high_cas}kt"
         flight_evolution = "constCAS"
         target_cas = high_cas
-    else:
+    elif low_cas_fl is not None and low_cas is not None:
         # Use low altitude CAS
         M = None  # Will be calculated later
         speed_mode = f"CAS {low_cas}kt"
         flight_evolution = "constCAS"
         target_cas = low_cas
+    else:
+        # No intermediate CAS, use high altitude CAS
+        M = None  # Will be calculated later
+        speed_mode = f"CAS {high_cas}kt"
+        flight_evolution = "constCAS"
+        target_cas = high_cas
     
     return M, speed_mode, flight_evolution, target_cas
 
+
 def calculate_performance_at_altitude(flight_level, aircraft_mass, bada4, 
                                     crossover_fl, descent_mach, high_cas, 
-                                    low_cas, low_cas_fl, constant_cas, DeltaTemp=0):
-    """Calculate descent performance at specified flight level"""
+                                    low_cas, low_cas_fl, constant_cas, DeltaTemp=0,
+                                    force_cas=None):
+    """Calculate descent performance at specified flight level, with option to force CAS"""
     altitude_ft = flight_level * 100
     altitude_m = conv.ft2m(altitude_ft)
     
@@ -56,10 +65,17 @@ def calculate_performance_at_altitude(flight_level, aircraft_mass, bada4,
     theta_val, delta_val, sigma_val = atm.atmosphereProperties(altitude_m, DeltaTemp)
     
     # Determine speed profile parameters
-    M, speed_mode, flight_evolution, target_cas = determine_speed_profile(
-        flight_level, crossover_fl, descent_mach, high_cas, 
-        low_cas, low_cas_fl, constant_cas
-    )
+    if force_cas is None:
+        M, speed_mode, flight_evolution, target_cas = determine_speed_profile(
+            flight_level, crossover_fl, descent_mach, high_cas, 
+            low_cas, low_cas_fl, constant_cas
+        )
+    else:
+        # Force a specific CAS value
+        M = None
+        speed_mode = f"CAS {force_cas}kt"
+        flight_evolution = "constCAS"
+        target_cas = force_cas
     
     # Calculate actual Mach number, CAS, TAS
     if M is not None:
@@ -151,8 +167,10 @@ def calculate_performance_at_altitude(flight_level, aircraft_mass, bada4,
         "Fuel Flow(kg/h)": round(fuel_flow * 3600, 1),
         "Fuel Flow(kg/s)": round(fuel_flow, 4),
         "Lift Coefficient": round(cl, 3),
-        "Drag Coefficient": round(cd, 4)
+        "Drag Coefficient": round(cd, 4),
+        "Is Deceleration Point": False
     }
+
 
 def generate_flight_levels(cruise_fl, target_fl):
     """Generate a list of flight levels during descent"""
@@ -163,39 +181,6 @@ def generate_flight_levels(cruise_fl, target_fl):
         flight_levels.append(target_fl)
     return flight_levels
 
-def calculate_cumulative_data(df, flight_levels):
-    """Calculate cumulative distance, time, and fuel consumption"""
-    horizontal_distance = np.zeros(len(flight_levels))
-    fuel_consumption = np.zeros(len(flight_levels))
-    time_elapsed = np.zeros(len(flight_levels))
-    
-    for i in range(1, len(flight_levels)):
-        # Calculate altitude difference between adjacent flight levels (feet)
-        altitude_diff = (flight_levels[i-1] - flight_levels[i]) * 100
-        # Use average alt-dist ratio of the two points
-        avg_ft_per_nm = (df.iloc[i-1]['Alt-Dist Ratio(ft/nm)'] + df.iloc[i]['Alt-Dist Ratio(ft/nm)']) / 2
-        if avg_ft_per_nm > 0:
-            segment_distance = altitude_diff / avg_ft_per_nm
-        else:
-            segment_distance = 0
-        # Cumulative horizontal distance
-        horizontal_distance[i] = horizontal_distance[i-1] + segment_distance
-        
-        # Calculate time and fuel
-        avg_tas_kt = (df.iloc[i-1]['TAS(kt)'] + df.iloc[i]['TAS(kt)']) / 2
-        avg_tas_nm_per_sec = avg_tas_kt / 3600  # Convert to nm/s
-        if avg_tas_nm_per_sec > 0:
-            segment_time_seconds = segment_distance / avg_tas_nm_per_sec
-        else:
-            segment_time_seconds = 0
-        
-        time_elapsed[i] = time_elapsed[i-1] + segment_time_seconds
-        
-        avg_fuel_flow = (df.iloc[i-1]['Fuel Flow(kg/s)'] + df.iloc[i]['Fuel Flow(kg/s)']) / 2
-        segment_fuel = avg_fuel_flow * segment_time_seconds
-        fuel_consumption[i] = fuel_consumption[i-1] + segment_fuel
-    
-    return horizontal_distance, time_elapsed, fuel_consumption
 
 def create_speed_profile_name(constant_cas, high_cas, low_cas, low_cas_fl, descent_mach):
     """Create speed profile name"""
@@ -210,93 +195,6 @@ def create_speed_profile_name(constant_cas, high_cas, low_cas, low_cas_fl, desce
         else:
             return f"{descent_mach}M/{high_cas}kt/{low_cas}kt@FL{low_cas_fl}"
 
-def calculate_basic_descent_profile(cruise_fl, target_fl, aircraft_mass, 
-                                  descent_mach, high_cas, ac_model, 
-                                  low_cas=None, low_cas_fl=100, 
-                                  constant_cas=None, print_details=True):
-    """
-    Calculate basic descent profile (without deceleration segments)
-    """
-    # Initialize aircraft model
-    bada4 = initialize_aircraft_model(ac_model)
-    
-    # Set low altitude CAS
-    if low_cas is None:
-        low_cas = high_cas
-    
-    # Set parameters for constant CAS descent
-    if constant_cas is not None:
-        descent_mach = 0.9  # Set a higher Mach number to ensure crossover altitude is above cruise altitude
-        high_cas = constant_cas
-        low_cas = constant_cas if low_cas is None else low_cas
-    
-    # Calculate crossover altitude
-    high_cas_ms = conv.kt2ms(high_cas)
-    crossover_m = atm.crossOver(cas=high_cas_ms, Mach=descent_mach)
-    crossover_ft = conv.m2ft(crossover_m)
-    crossover_fl = int(crossover_ft / 100)
-    
-    # Create speed profile name
-    profile_name = create_speed_profile_name(constant_cas, high_cas, low_cas, low_cas_fl, descent_mach)
-    
-    if print_details:
-        print(f"\n{'='*80}")
-        print(f"Basic Descent Profile Analysis: {ac_model}")
-        print(f"{'='*80}")
-        print(f"Aircraft Weight: {aircraft_mass/1000:.1f} tonnes")
-        print(f"Descent Profile: {profile_name}")
-        print(f"Cruise Altitude: FL{cruise_fl} ({cruise_fl*100:,} ft)")
-        print(f"Target Altitude: FL{target_fl} ({target_fl*100:,} ft)")
-        print(f"Crossover Altitude: FL{crossover_fl} ({crossover_fl*100:,} ft)")
-        print(f"{'='*80}")
-    
-    # Generate flight levels list
-    flight_levels = generate_flight_levels(cruise_fl, target_fl)
-    
-    # Calculate performance at each flight level
-    results = []
-    for fl in flight_levels:
-        result = calculate_performance_at_altitude(
-            fl, aircraft_mass, bada4, crossover_fl, descent_mach, 
-            high_cas, low_cas, low_cas_fl, constant_cas
-        )
-        results.append(result)
-    
-    # Create DataFrame
-    df = pd.DataFrame(results)
-    
-    # Calculate cumulative data
-    horizontal_distance, time_elapsed, fuel_consumption = calculate_cumulative_data(df, flight_levels)
-    
-    # Add cumulative data to DataFrame
-    df['Cumulative Distance(nm)'] = [round(d, 1) for d in horizontal_distance]
-    df['Cumulative Time(s)'] = [round(t, 0) for t in time_elapsed]
-    df['Cumulative Fuel(kg)'] = [round(f, 1) for f in fuel_consumption]
-    
-    if print_details:
-        print_basic_profile_table(df, profile_name)
-    
-    # Calculate summary information
-    total_distance = horizontal_distance[-1]
-    total_time = time_elapsed[-1]
-    total_fuel = fuel_consumption[-1]
-    total_altitude_change = (cruise_fl - target_fl) * 100
-    avg_ft_per_nm = total_altitude_change / total_distance if total_distance > 0 else 0
-    
-    summary = {
-        "Profile": profile_name,
-        "Descent Distance (nm)": round(total_distance, 1),
-        "Descent Time (s)": round(total_time, 0),
-        "Fuel Consumption (kg)": round(total_fuel, 1),
-        "Average Fuel Flow (kg/h)": round(total_fuel/(total_time/3600), 1) if total_time > 0 else 0,
-        "Average Descent Gradient (%)": round(total_altitude_change/6076.12/total_distance*100, 2) if total_distance > 0 else 0,
-        "Altitude-to-Distance Ratio (ft/nm)": round(avg_ft_per_nm, 1)
-    }
-    
-    if print_details:
-        print_summary(summary)
-    
-    return summary, df, flight_levels
 
 def calculate_deceleration_segment(current_cas, target_cas, fuel_flow_kg_per_sec):
     """
@@ -320,158 +218,187 @@ def calculate_deceleration_segment(current_cas, target_cas, fuel_flow_kg_per_sec
     
     return decel_distance_nm, decel_time_sec, decel_fuel
 
-def find_altitude_index(flight_levels, target_fl):
-    """Find index near target flight level"""
-    for i in range(1, len(flight_levels)):
-        if flight_levels[i-1] > target_fl >= flight_levels[i]:
-            return i
-    return None
 
-def apply_fl100_deceleration(decel_segments, new_df, flight_levels, 
-                           horizontal_distance, time_elapsed, fuel_consumption):
-    """Apply FL100 statutory speed limit deceleration segment"""
-    fl100_index = find_altitude_index(flight_levels, 100)
-    
-    if fl100_index is not None:
-        current_cas = new_df.iloc[fl100_index-1]['CAS(kt)']
-        
-        if current_cas > 250:
-            fuel_flow = new_df.iloc[fl100_index-1]['Fuel Flow(kg/s)']
-            
-            decel_dist, decel_time, decel_fuel = calculate_deceleration_segment(
-                current_cas, 250, fuel_flow
-            )
-            
-            decel_segments.append({
-                'type': 'Statutory Deceleration',
-                'FL': 100,
-                'CAS before': current_cas,
-                'CAS after': 250,
-                'Distance(nm)': decel_dist,
-                'Time(s)': decel_time,
-                'Fuel(kg)': decel_fuel,
-                'TAS(kt)': new_df.iloc[fl100_index-1]['TAS(kt)']
-            })
-            
-            # Update CAS values at and below FL100 (new)
-            for i in range(fl100_index-1, len(new_df)):
-                if new_df.iloc[i]['CAS(kt)'] > 250:
-                    new_df.at[i, 'CAS(kt)'] = 250
-            
-            # Add deceleration segment's distance, time and fuel to all points after FL100
-            horizontal_distance[fl100_index:] += decel_dist
-            time_elapsed[fl100_index:] += decel_time
-            fuel_consumption[fl100_index:] += decel_fuel
-    
-    return fl100_index
-
-def apply_profile_deceleration(decel_segments, new_df, flight_levels, high_cas, low_cas, 
-                             low_cas_fl, fl100_index, horizontal_distance, time_elapsed, fuel_consumption):
-    """Apply profile deceleration segment"""
-    if low_cas is not None and low_cas_fl is not None and low_cas != high_cas:
-        low_cas_index = find_altitude_index(flight_levels, low_cas_fl)
-        
-        # Avoid duplicate calculation of FL100 deceleration
-        if low_cas_index is not None and (low_cas_fl != 100 or fl100_index is None):
-            current_cas = new_df.iloc[low_cas_index-1]['CAS(kt)']
-            
-            if current_cas > low_cas:
-                fuel_flow = new_df.iloc[low_cas_index-1]['Fuel Flow(kg/s)']
-                
-                decel_dist, decel_time, decel_fuel = calculate_deceleration_segment(
-                    current_cas, low_cas, fuel_flow
-                )
-                
-                decel_segments.append({
-                    'type': 'Profile Deceleration',
-                    'FL': low_cas_fl,
-                    'CAS before': current_cas,
-                    'CAS after': low_cas,
-                    'Distance(nm)': decel_dist,
-                    'Time(s)': decel_time,
-                    'Fuel(kg)': decel_fuel,
-                    'TAS(kt)': new_df.iloc[low_cas_index-1]['TAS(kt)']
-                })
-                
-                horizontal_distance[low_cas_index:] += decel_dist
-                time_elapsed[low_cas_index:] += decel_time
-                fuel_consumption[low_cas_index:] += decel_fuel
-
-def apply_approach_deceleration(decel_segments, new_df, flight_levels, 
-                              horizontal_distance, time_elapsed, fuel_consumption):
-    """Apply FL30 final approach deceleration segment"""
-    fl030_index = find_altitude_index(flight_levels, 30)
-    
-    if fl030_index is not None:
-        current_cas = new_df.iloc[fl030_index-1]['CAS(kt)']
-        
-        if current_cas > 220:
-            fuel_flow = new_df.iloc[fl030_index-1]['Fuel Flow(kg/s)']
-            
-            decel_dist, decel_time, decel_fuel = calculate_deceleration_segment(
-                current_cas, 220, fuel_flow
-            )
-            
-            decel_segments.append({
-                'type': 'Approach Deceleration',
-                'FL': 30,
-                'CAS before': current_cas,
-                'CAS after': 220,
-                'Distance(nm)': decel_dist,
-                'Time(s)': decel_time,
-                'Fuel(kg)': decel_fuel,
-                'TAS(kt)': new_df.iloc[fl030_index-1]['TAS(kt)']
-            })
-            
-            horizontal_distance[fl030_index:] += decel_dist
-            time_elapsed[fl030_index:] += decel_time
-            fuel_consumption[fl030_index:] += decel_fuel
-
-def apply_deceleration_segments(basic_summary, basic_df, flight_levels, 
-                               high_cas, low_cas=None, low_cas_fl=100, 
-                               print_details=True):
+def calculate_detailed_descent_with_deceleration(cruise_fl, target_fl, aircraft_mass, 
+                                              descent_mach, high_cas, ac_model,
+                                              low_cas=None, low_cas_fl=100,
+                                              constant_cas=None):
     """
-    Apply all deceleration segments to the basic descent profile
+    Calculate detailed descent profile including deceleration segments as level flight
     """
-    # Copy original data
-    new_df = basic_df.copy()
+    # Initialize aircraft model
+    bada4 = initialize_aircraft_model(ac_model)
     
-    # Get original cumulative data
-    horizontal_distance = new_df['Cumulative Distance(nm)'].values.copy()
-    time_elapsed = new_df['Cumulative Time(s)'].values.copy()
-    fuel_consumption = new_df['Cumulative Fuel(kg)'].values.copy()
+    # Set low altitude CAS
+    if low_cas is None:
+        low_cas = high_cas
     
-    # Create deceleration segment record list
+    # Set parameters for constant CAS descent
+    if constant_cas is not None:
+        descent_mach = 0.9  # Set a higher Mach number to ensure crossover altitude is above cruise altitude
+        high_cas = constant_cas
+        low_cas = constant_cas
+    
+    # Calculate crossover altitude
+    high_cas_ms = conv.kt2ms(high_cas)
+    crossover_m = atm.crossOver(cas=high_cas_ms, Mach=descent_mach)
+    crossover_ft = conv.m2ft(crossover_m)
+    crossover_fl = int(crossover_ft / 100)
+    
+    # Create speed profile name
+    profile_name = create_speed_profile_name(constant_cas, high_cas, low_cas, low_cas_fl, descent_mach)
+    
+    # Generate flight levels list
+    flight_levels = generate_flight_levels(cruise_fl, target_fl)
+    
+    # Create a list to store the deceleration segments
     decel_segments = []
     
-    # Apply various deceleration segments
-    fl100_index = apply_fl100_deceleration(decel_segments, new_df, flight_levels, 
-                                         horizontal_distance, time_elapsed, fuel_consumption)
+    # Create a list to store all data points (including deceleration points)
+    result_points = []
     
-    apply_profile_deceleration(decel_segments, new_df, flight_levels, high_cas, low_cas, 
-                             low_cas_fl, fl100_index, horizontal_distance, time_elapsed, fuel_consumption)
+    # Current accumulated values
+    cum_distance = 0.0
+    cum_time = 0.0
+    cum_fuel = 0.0
     
-    apply_approach_deceleration(decel_segments, new_df, flight_levels, 
-                              horizontal_distance, time_elapsed, fuel_consumption)
+    # Keep track of the current CAS limit at each level
+    current_cas_limit = None
     
-    # Update cumulative data in DataFrame
-    new_df['Cumulative Distance(nm)'] = [round(d, 1) for d in horizontal_distance]
-    new_df['Cumulative Time(s)'] = [round(t, 0) for t in time_elapsed]
-    new_df['Cumulative Fuel(kg)'] = [round(f, 1) for f in fuel_consumption]
+    # Process each flight level
+    for i, fl in enumerate(flight_levels):
+        # Determine if this is a deceleration point
+        is_fl100 = (fl == 100)
+        is_low_cas_fl = (fl == low_cas_fl) if low_cas_fl is not None else False
+        is_fl30 = (fl == 30)
+        
+        # Calculate performance at this flight level (using normal speed schedule)
+        point_data = calculate_performance_at_altitude(
+            fl, aircraft_mass, bada4, crossover_fl, descent_mach, 
+            high_cas, low_cas, low_cas_fl, constant_cas,
+            force_cas=current_cas_limit
+        )
+        
+        # Add accumulated data
+        if i > 0:
+            # Calculate distance, time, and fuel for descent from previous level
+            prev_point = result_points[-1]
+            altitude_diff = (prev_point['FL'] - fl) * 100  # In feet
+            
+            # Use average of previous and current point for calculations
+            avg_alt_dist_ratio = (prev_point['Alt-Dist Ratio(ft/nm)'] + point_data['Alt-Dist Ratio(ft/nm)']) / 2
+            if avg_alt_dist_ratio > 0:
+                segment_distance = altitude_diff / avg_alt_dist_ratio
+            else:
+                segment_distance = 0
+                
+            avg_tas_kt = (prev_point['TAS(kt)'] + point_data['TAS(kt)']) / 2
+            avg_tas_nm_per_sec = avg_tas_kt / 3600  # Convert to nm/s
+            
+            if avg_tas_nm_per_sec > 0:
+                segment_time = segment_distance / avg_tas_nm_per_sec
+            else:
+                segment_time = 0
+                
+            avg_fuel_flow = (prev_point['Fuel Flow(kg/s)'] + point_data['Fuel Flow(kg/s)']) / 2
+            segment_fuel = avg_fuel_flow * segment_time
+            
+            # Update accumulated values
+            cum_distance += segment_distance
+            cum_time += segment_time
+            cum_fuel += segment_fuel
+        
+        # Add accumulated values to the point data
+        point_data['Cumulative Distance(nm)'] = round(cum_distance, 1)
+        point_data['Cumulative Time(s)'] = round(cum_time, 0)
+        point_data['Cumulative Fuel(kg)'] = round(cum_fuel, 1)
+        
+        # Add this point to the results
+        result_points.append(point_data)
+        
+        # Check if we need to add deceleration segments at this flight level
+        need_deceleration = False
+        target_cas = None
+        decel_type = None
+        
+        # FL100 - Statutory speed limit (250kt)
+        if is_fl100 and point_data['CAS(kt)'] > 250:
+            need_deceleration = True
+            target_cas = 250
+            decel_type = "Statutory Deceleration"
+            current_cas_limit = 250
+            
+        # User defined low_cas_fl - Profile deceleration
+        elif is_low_cas_fl and low_cas is not None and point_data['CAS(kt)'] > low_cas:
+            need_deceleration = True
+            target_cas = low_cas
+            decel_type = "Profile Deceleration"
+            current_cas_limit = low_cas
+            
+        # FL30 - Approach speed limit (220kt)
+        elif is_fl30 and point_data['CAS(kt)'] > 220:
+            need_deceleration = True
+            target_cas = 220
+            decel_type = "Approach Deceleration"
+            current_cas_limit = 220
+        
+        # Add deceleration segment if needed
+        if need_deceleration:
+            current_cas = point_data['CAS(kt)']
+            
+            # Calculate deceleration parameters
+            decel_dist, decel_time, decel_fuel = calculate_deceleration_segment(
+                current_cas, target_cas, point_data['Fuel Flow(kg/s)']
+            )
+            
+            # Record this deceleration segment
+            decel_segment = {
+                'type': decel_type,
+                'FL': fl,
+                'CAS before': current_cas,
+                'CAS after': target_cas,
+                'Distance(nm)': decel_dist,
+                'Time(s)': decel_time,
+                'Fuel(kg)': decel_fuel,
+                'TAS(kt)': point_data['TAS(kt)']
+            }
+            decel_segments.append(decel_segment)
+            
+            # Create a new data point after deceleration (same FL, new CAS)
+            decel_point = calculate_performance_at_altitude(
+                fl, aircraft_mass, bada4, crossover_fl, descent_mach, 
+                high_cas, low_cas, low_cas_fl, constant_cas,
+                force_cas=target_cas
+            )
+            
+            # Mark as a deceleration point
+            decel_point['Is Deceleration Point'] = True
+            
+            # Update accumulated values
+            cum_distance += decel_dist
+            cum_time += decel_time
+            cum_fuel += decel_fuel
+            
+            # Add accumulated values to the deceleration point
+            decel_point['Cumulative Distance(nm)'] = round(cum_distance, 1)
+            decel_point['Cumulative Time(s)'] = round(cum_time, 0)
+            decel_point['Cumulative Fuel(kg)'] = round(cum_fuel, 1)
+            
+            # Add this point to the results
+            result_points.append(decel_point)
     
-    if print_details:
-        print_deceleration_segments_table(decel_segments)
-        print_final_profile_table(new_df)
+    # Create DataFrame from all points
+    df = pd.DataFrame(result_points)
     
-    # Calculate new summary information
-    total_distance = horizontal_distance[-1]
-    total_time = time_elapsed[-1]
-    total_fuel = fuel_consumption[-1]
-    total_altitude_change = (flight_levels[0] - flight_levels[-1]) * 100
+    # Calculate summary information
+    total_distance = df.iloc[-1]['Cumulative Distance(nm)']
+    total_time = df.iloc[-1]['Cumulative Time(s)']
+    total_fuel = df.iloc[-1]['Cumulative Fuel(kg)']
+    total_altitude_change = (cruise_fl - target_fl) * 100
     avg_ft_per_nm = total_altitude_change / total_distance if total_distance > 0 else 0
     
-    new_summary = {
-        "Profile": basic_summary["Profile"], # + " (with deceleration segments)",
+    summary = {
+        "Profile": profile_name,
         "Descent Distance (nm)": round(total_distance, 1),
         "Descent Time (s)": round(total_time, 0),
         "Fuel Consumption (kg)": round(total_fuel, 1),
@@ -480,61 +407,8 @@ def apply_deceleration_segments(basic_summary, basic_df, flight_levels,
         "Altitude-to-Distance Ratio (ft/nm)": round(avg_ft_per_nm, 1)
     }
     
-    if print_details:
-        print_final_summary(new_summary, basic_summary)
-    
-    return new_summary, new_df, decel_segments
+    return summary, df, decel_segments
 
-def print_basic_profile_table(df, profile_name):
-    """Print basic descent profile table"""
-    print(f"\nBasic Descent Data - {profile_name}:")
-    print("-" * 165)
-    
-    # Select key columns to display
-    display_columns = [
-        'FL', 'Speed Mode', 'Mach', 'CAS(kt)', 'TAS(kt)', 
-        'Descent Rate(ft/min)', 'Descent Gradient(%)', 'Alt-Dist Ratio(ft/nm)',
-        'Fuel Flow(kg/h)', 'Cumulative Distance(nm)', 'Cumulative Time(s)', 'Cumulative Fuel(kg)'
-    ]
-    
-    # Print header
-    header = ""
-    for col in display_columns:
-        if col in ['FL', 'Mach', 'CAS(kt)', 'TAS(kt)']:
-            header += f"{col:>8}"
-        elif col in ['Speed Mode']:
-            header += f"{col:>12}"
-        elif col in ['Descent Rate(ft/min)', 'Descent Gradient(%)', 'Alt-Dist Ratio(ft/nm)', 'Fuel Flow(kg/h)']:
-            header += f"{col:>12}"
-        else:
-            header += f"{col:>14}"
-    print(header)
-    print("-" * 165)
-    
-    # Print data rows
-    for _, row in df.iterrows():
-        line = ""
-        for col in display_columns:
-            value = row[col]
-            if col in ['FL']:
-                line += f"{value:>8.0f}"
-            elif col in ['Mach']:
-                line += f"{value:>8.3f}"
-            elif col in ['CAS(kt)', 'TAS(kt)']:
-                line += f"{value:>8.1f}"
-            elif col in ['Speed Mode']:
-                line += f"{str(value):>12}"
-            elif col in ['Descent Rate(ft/min)', 'Alt-Dist Ratio(ft/nm)', 'Cumulative Time(s)']:
-                line += f"{value:>12.0f}"
-            elif col in ['Descent Gradient(%)']:
-                line += f"{value:>12.2f}"
-            elif col in ['Fuel Flow(kg/h)']:
-                line += f"{value:>12.1f}"
-            else:
-                line += f"{value:>14.1f}"
-        print(line)
-    
-    print("-" * 165)
 
 def print_deceleration_segments_table(decel_segments):
     """Print deceleration segments analysis table"""
@@ -550,6 +424,7 @@ def print_deceleration_segments_table(decel_segments):
                   f"{segment['Time(s)']:<10.0f}{segment['Fuel(kg)']:<12.1f}{segment['TAS(kt)']:<10.1f}")
         
         print("-" * 120)
+
 
 def print_final_profile_table(df):
     """Print final descent profile table with deceleration segments"""
@@ -587,6 +462,9 @@ def print_final_profile_table(df):
     
     # Print data rows
     for _, row in df_display.iterrows():
+        # Check if this is a deceleration point
+        is_decel = row.get('Is Deceleration Point', False)
+        
         line = ""
         for col in display_columns:
             value = row[col]
@@ -608,12 +486,19 @@ def print_final_profile_table(df):
                 line += f"{value:>12.1f}"
             else:
                 line += f"{value:>14.1f}"
+                
+        # Mark deceleration points with asterisk
+        if is_decel:
+            line += " *"
+            
         print(line)
     
     print("-" * 180)
+    print("* Indicates point after deceleration")
+
 
 def print_summary(summary):
-    """Print descent profile summary (showing both seconds and minutes)"""
+    """Print descent profile summary"""
     print(f"\nDescent Profile Summary:")
     print(f"Total Descent Distance: {summary['Descent Distance (nm)']} nm")
     print(f"Total Descent Time: {summary['Descent Time (s)']} seconds ({summary['Descent Time (s)']/60:.1f} minutes)")
@@ -623,70 +508,80 @@ def print_summary(summary):
     print(f"Altitude-Distance Ratio: {summary['Altitude-to-Distance Ratio (ft/nm)']} ft/nm")
     print("=" * 80)
 
-def print_final_summary(new_summary, basic_summary):
-    """Print final summary information, including comparison with basic profile"""
-    print(f"\nDescent Profile Summary after Adding Deceleration Segments:")
-    distance_increase = new_summary['Descent Distance (nm)'] - basic_summary['Descent Distance (nm)']
-    time_increase = new_summary['Descent Time (s)'] - basic_summary['Descent Time (s)']
-    fuel_increase = new_summary['Fuel Consumption (kg)'] - basic_summary['Fuel Consumption (kg)']
-    
-    print(f"Total Descent Distance: {new_summary['Descent Distance (nm)']} nm (increased by {distance_increase:.1f} nm)")
-    print(f"Total Descent Time: {new_summary['Descent Time (s)']} seconds ({new_summary['Descent Time (s)']/60:.1f} minutes) (increased by {time_increase:.0f} sec/{time_increase/60:.1f} min)")
-    print(f"Total Fuel Consumption: {new_summary['Fuel Consumption (kg)']} kg (increased by {fuel_increase:.1f} kg)")
-    print(f"Average Descent Gradient: {new_summary['Average Descent Gradient (%)']} %")
-    print(f"Altitude-Distance Ratio: {new_summary['Altitude-to-Distance Ratio (ft/nm)']} ft/nm")
-    print("=" * 80)
 
-def calculate_complete_descent_profile(cruise_fl, target_fl, aircraft_mass, 
-                                     descent_mach, high_cas, ac_model, 
-                                     low_cas=None, low_cas_fl=100, 
-                                     constant_cas=None, include_deceleration=True,
-                                     print_details=True):
+def calculate_descent_profile(cruise_fl, target_fl, aircraft_mass, ac_model, 
+                            descent_mach, high_cas, 
+                            intermediate_cas=None, intermediate_fl=None,
+                            final_approach_cas=220, final_approach_fl=30,
+                            print_details=True):
     """
-    Calculate complete descent profile (including basic profile and deceleration segments)
+    统一的下降剖面计算函数 - 优化参数调用
     
     Parameters:
-    cruise_fl: Cruise flight level (FL)
-    target_fl: Target flight level (FL)
-    aircraft_mass: Aircraft weight (kg)
-    descent_mach: Descent Mach number
-    high_cas: High altitude CAS (kt)
-    ac_model: Aircraft model
-    low_cas: Low altitude CAS (kt)
-    low_cas_fl: Flight level where low altitude CAS begins (FL)
-    constant_cas: Constant CAS descent speed (kt)
-    include_deceleration: Whether to include deceleration segments
-    print_details: Whether to print detailed information
+    cruise_fl: int - 巡航高度层
+    target_fl: int - 目标高度层
+    aircraft_mass: float - 飞机重量(kg)
+    ac_model: str - 飞机型号
+    descent_mach: float - 下降马赫数
+    high_cas: int - 高空校正空速(kt)
+    intermediate_cas: int or None - 中间减速目标速度(kt)，None表示不使用
+    intermediate_fl: int or None - 中间减速高度层，None表示不使用
+    final_approach_cas: int - 最终进近速度(kt)，默认220kt
+    final_approach_fl: int - 最终进近减速高度层，默认FL30
+    print_details: bool - 是否打印详细信息
     
     Returns:
-    basic_summary, final_summary, basic_df, final_df, decel_segments
+    tuple: (summary, df, decel_segments)
     """
-    # Calculate basic descent profile
-    basic_summary, basic_df, flight_levels = calculate_basic_descent_profile(
-        cruise_fl, target_fl, aircraft_mass, descent_mach, high_cas, ac_model,
-        low_cas, low_cas_fl, constant_cas, print_details
+    # Set low altitude CAS and FL
+    low_cas = intermediate_cas
+    low_cas_fl = intermediate_fl
+    
+    # Calculate the detailed descent profile with deceleration segments
+    summary, df, decel_segments = calculate_detailed_descent_with_deceleration(
+        cruise_fl=cruise_fl,
+        target_fl=target_fl,
+        aircraft_mass=aircraft_mass,
+        descent_mach=descent_mach,
+        high_cas=high_cas,
+        ac_model=ac_model,
+        low_cas=low_cas,
+        low_cas_fl=low_cas_fl
     )
     
-    if include_deceleration:
-        # Add deceleration segments
-        final_summary, final_df, decel_segments = apply_deceleration_segments(
-            basic_summary, basic_df, flight_levels, high_cas, low_cas, low_cas_fl, print_details
-        )
-        return basic_summary, final_summary, basic_df, final_df, decel_segments
-    else:
-        return basic_summary, None, basic_df, None, []
+    if print_details:
+        # Print header information
+        print(f"\n{'='*80}")
+        print(f"Descent Profile Analysis: {ac_model}")
+        print(f"{'='*80}")
+        print(f"Aircraft Weight: {aircraft_mass/1000:.1f} tonnes")
+        print(f"Descent Profile: {summary['Profile']}")
+        print(f"Cruise Altitude: FL{cruise_fl} ({cruise_fl*100:,} ft)")
+        print(f"Target Altitude: FL{target_fl} ({target_fl*100:,} ft)")
+        print(f"{'='*80}")
+        
+        # Print deceleration segments
+        print_deceleration_segments_table(decel_segments)
+        
+        # Print detailed profile
+        print_final_profile_table(df)
+        
+        # Print summary
+        print_summary(summary)
     
- ### Example code to use ###
+    return summary, df, decel_segments
 
-    # basic_summary, final_summary, basic_df, final_df, decel_segments = calculate_complete_descent_profile(
-    #     cruise_fl=370,
-    #     target_fl=30,
-    #     aircraft_mass=60000,
-    #     descent_mach=0.73,
-    #     high_cas=250,
-    #     ac_model="A320-232",
-    #     low_cas=220,
-    #     low_cas_fl=150,
-    #     include_deceleration=True,
-    #     print_details=True
-    # )
+
+# ======================== 使用示例 ========================
+
+# 示例: 0.73M/270kt，中间减速到220kt@FL50
+summary, df, decel_segments = calculate_descent_profile(
+    cruise_fl=370,
+    target_fl=30,
+    aircraft_mass=60000,
+    ac_model="A320-232",
+    descent_mach=0.73,
+    high_cas=270,
+    intermediate_cas=220, 
+    intermediate_fl=50
+)
