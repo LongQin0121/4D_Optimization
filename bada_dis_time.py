@@ -515,20 +515,20 @@ def calculate_descent_profile(cruise_fl, target_fl, aircraft_mass, ac_model,
                             final_approach_cas=220, final_approach_fl=30,
                             print_details=True):
     """
-    统一的下降剖面计算函数 - 优化参数调用
+    Unified descent profile calculation function - optimized parameter call
     
     Parameters:
-    cruise_fl: int - 巡航高度层
-    target_fl: int - 目标高度层
-    aircraft_mass: float - 飞机重量(kg)
-    ac_model: str - 飞机型号
-    descent_mach: float - 下降马赫数
-    high_cas: int - 高空校正空速(kt)
-    intermediate_cas: int or None - 中间减速目标速度(kt)，None表示不使用
-    intermediate_fl: int or None - 中间减速高度层，None表示不使用
-    final_approach_cas: int - 最终进近速度(kt)，默认220kt
-    final_approach_fl: int - 最终进近减速高度层，默认FL30
-    print_details: bool - 是否打印详细信息
+    cruise_fl: int - Cruise flight level
+    target_fl: int - Target flight level
+    aircraft_mass: float - Aircraft mass (kg)
+    ac_model: str - Aircraft model
+    descent_mach: float - Descent Mach number
+    high_cas: int - High-altitude calibrated airspeed (kt)
+    intermediate_cas: int or None - Intermediate deceleration target speed (kt), None means not used
+    intermediate_fl: int or None - Intermediate deceleration flight level, None means not used
+    final_approach_cas: int - Final approach speed (kt), default 220 kt
+    final_approach_fl: int - Final approach deceleration flight level, default FL30
+    print_details: bool - Whether to print detailed information
     
     Returns:
     tuple: (summary, df, decel_segments)
@@ -572,9 +572,9 @@ def calculate_descent_profile(cruise_fl, target_fl, aircraft_mass, ac_model,
     return summary, df, decel_segments
 
 
-# ======================== 使用示例 ========================
+# ======================== Example ========================
 
-# 示例: 0.73M/270kt，中间减速到220kt@FL50
+# Example: 0.73M/270kt，220kt@FL50
 # summary, df, decel_segments = calculate_descent_profile(
 #     cruise_fl=370,
 #     target_fl=30,

@@ -3,20 +3,20 @@ import Utility
 
 def calculate_eta_window(origin_fl, target_fl, aircraft_mass, ac_model, standard_route_length=200, print_details=False):
     """
-    Calculate the time window (ETAmin and ETAmax) for descent process, including cruise segment
+    计算下降过程的时间窗口(ETAmin和ETAmax)，包括巡航段
     
     Parameters:
-    origin_fl: int - Initial flight level
-    target_fl: int - Target flight level
-    aircraft_mass: float - Aircraft mass (kg)
-    ac_model: str - Aircraft model
-    standard_route_length: float - Standard route total length (nm)
-    print_details: bool - Whether to print detailed information
+    origin_fl: int - 起始高度层
+    target_fl: int - 目标高度层
+    aircraft_mass: float - 飞机重量(kg)
+    ac_model: str - 飞机型号
+    standard_route_length: float - 标准航路总长度(nm)
+    print_details: bool - 是否打印详细信息
     
     Returns:
-    dict: Dictionary containing ETAmin and ETAmax information
+    dict: 包含ETAmin和ETAmax信息的字典
     """
-    # Calculate ETAmin - using high-speed descent profile
+    # 计算ETAmin - 使用高速下降剖面
     min_summary, min_df, min_decel = calculate_descent_profile(
         cruise_fl=origin_fl,
         target_fl=target_fl,
@@ -27,7 +27,7 @@ def calculate_eta_window(origin_fl, target_fl, aircraft_mass, ac_model, standard
         print_details=False
     )
     
-    # Calculate ETAmax - using low-speed descent profile
+    # 计算ETAmax - 使用低速下降剖面
     max_summary, max_df, max_decel = calculate_descent_profile(
         cruise_fl=origin_fl,
         target_fl=target_fl,
@@ -40,40 +40,40 @@ def calculate_eta_window(origin_fl, target_fl, aircraft_mass, ac_model, standard
         print_details=False
     )
     
-    # Calculate ETAmin cruise segment
+    # 计算ETAmin巡航段
     min_descent_distance = min_summary["Descent Distance (nm)"]
-    min_descent_time = round(min_summary["Descent Time (s)"], 1)  # Keep one decimal place
+    min_descent_time = round(min_summary["Descent Time (s)"], 1)  # 保留一位小数
     
-    # Calculate cruise true airspeed and ground speed (ETAmin)
+    # 计算巡航真空速和地速 (ETAmin)
     min_tas = Utility.mach2tas_kt(flight_level=origin_fl, mach=0.80)
     min_gs = round(min_tas, 1)
     
     min_cruise_distance = standard_route_length - min_descent_distance
-    min_cruise_time = round(min_cruise_distance / min_gs * 3600, 1)  # Convert to seconds, keep one decimal place
+    min_cruise_time = round(min_cruise_distance / min_gs * 3600, 1)  # 转换为秒，保留一位小数
     min_eta = round(min_cruise_time + min_descent_time, 1)
     
-    # Calculate ETAmax cruise segment
+    # 计算ETAmax巡航段
     max_descent_distance = max_summary["Descent Distance (nm)"]
-    max_descent_time = round(max_summary["Descent Time (s)"], 1)  # Keep one decimal place
+    max_descent_time = round(max_summary["Descent Time (s)"], 1)  # 保留一位小数
     
-    # Calculate cruise true airspeed and ground speed (ETAmax)
+    # 计算巡航真空速和地速 (ETAmax)
     max_tas = Utility.mach2tas_kt(flight_level=origin_fl, mach=0.73)
     max_gs = round(max_tas, 1)
     
     max_cruise_distance = standard_route_length - max_descent_distance
-    max_cruise_time = round(max_cruise_distance / max_gs * 3600, 1)  # Convert to seconds, keep one decimal place
+    max_cruise_time = round(max_cruise_distance / max_gs * 3600, 1)  # 转换为秒，保留一位小数
     max_eta = round(max_cruise_time + max_descent_time, 1)
     
-    # Calculate time window
+    # 计算时间窗口
     window_seconds = round(max_eta - min_eta, 1)
     
-    # Create ETAmin and ETAmax arrays
+    # 创建ETAmin和ETAmax的数组
     eta_array = [min_eta, max_eta]
     
-    # Create cruise distance array
+    # 创建巡航距离数组
     cruise_distance_array = [min_cruise_distance, max_cruise_distance]
     
-    # Create result dictionary
+    # 创建结果字典
     result = {
         "ETAmin": {
             "profile": min_summary["Profile"],
@@ -102,54 +102,54 @@ def calculate_eta_window(origin_fl, target_fl, aircraft_mass, ac_model, standard
         "window": {
             "time_seconds": window_seconds,
             "standard_route_length": standard_route_length,
-            "eta_array": eta_array,  # Add ETA array
-            "cruise_distance_array": cruise_distance_array  # Add cruise distance array
+            "eta_array": eta_array,  # 添加ETA数组
+            "cruise_distance_array": cruise_distance_array  # 添加巡航距离数组
         }
     }
     
-    # Print results
+    # 打印结果
     if print_details:
         print(f"\n{'='*100}")
-        print(f"Full Route ETA Window Analysis: {ac_model}")
+        print(f"全航路ETA窗口分析: {ac_model}")
         print(f"{'='*100}")
-        print(f"Initial Altitude: FL{origin_fl}")
-        print(f"Target Altitude: FL{target_fl}")
-        print(f"Aircraft Weight: {aircraft_mass/1000:.1f} tonnes")
-        print(f"Standard Route Length: {standard_route_length} nm")
+        print(f"起始高度: FL{origin_fl}")
+        print(f"目标高度: FL{target_fl}")
+        print(f"飞机重量: {aircraft_mass/1000:.1f} tonnes")
+        print(f"标准航路长度: {standard_route_length} nm")
         print(f"{'='*100}")
         
-        print(f"\nETAmin (Fastest Arrival Option):")
-        print(f"  Flight Profile: {min_summary['Profile']}")
-        print(f"  Cruise Mach: 0.80M")
-        print(f"  Cruise Speed: {min_gs} kt")
-        print(f"  Cruise Distance: {min_cruise_distance:.1f} nm")
-        print(f"  Cruise Time: {min_cruise_time:.1f} seconds")
-        print(f"  Descent Distance: {min_descent_distance:.1f} nm")
-        print(f"  Descent Time: {min_descent_time:.1f} seconds")
-        print(f"  Total Flight Time: {min_eta:.1f} seconds")
-        print(f"  Descent Fuel: {min_summary['Fuel Consumption (kg)']:.1f} kg")
+        print(f"\nETAmin (最快到达方案):")
+        print(f"  飞行剖面: {min_summary['Profile']}")
+        print(f"  巡航马赫数: 0.80M")
+        print(f"  巡航速度: {min_gs} kt")
+        print(f"  巡航距离: {min_cruise_distance:.1f} nm")
+        print(f"  巡航时间: {min_cruise_time:.1f} 秒")
+        print(f"  下降距离: {min_descent_distance:.1f} nm")
+        print(f"  下降时间: {min_descent_time:.1f} 秒")
+        print(f"  总飞行时间: {min_eta:.1f} 秒")
+        print(f"  下降燃油: {min_summary['Fuel Consumption (kg)']:.1f} kg")
         
-        print(f"\nETAmax (Slowest Arrival Option):")
-        print(f"  Flight Profile: {max_summary['Profile']}")
-        print(f"  Cruise Mach: 0.73M")
-        print(f"  Cruise Speed: {max_gs} kt")
-        print(f"  Cruise Distance: {max_cruise_distance:.1f} nm")
-        print(f"  Cruise Time: {max_cruise_time:.1f} seconds")
-        print(f"  Descent Distance: {max_descent_distance:.1f} nm")
-        print(f"  Descent Time: {max_descent_time:.1f} seconds")
-        print(f"  Total Flight Time: {max_eta:.1f} seconds")
-        print(f"  Descent Fuel: {max_summary['Fuel Consumption (kg)']:.1f} kg")
+        print(f"\nETAmax (最慢到达方案):")
+        print(f"  飞行剖面: {max_summary['Profile']}")
+        print(f"  巡航马赫数: 0.73M")
+        print(f"  巡航速度: {max_gs} kt")
+        print(f"  巡航距离: {max_cruise_distance:.1f} nm")
+        print(f"  巡航时间: {max_cruise_time:.1f} 秒")
+        print(f"  下降距离: {max_descent_distance:.1f} nm")
+        print(f"  下降时间: {max_descent_time:.1f} 秒")
+        print(f"  总飞行时间: {max_eta:.1f} 秒")
+        print(f"  下降燃油: {max_summary['Fuel Consumption (kg)']:.1f} kg")
         
-        print(f"\nTime Window:")
-        print(f"  Window Size: {window_seconds:.1f} seconds")
-        print(f"  ETA Array: {eta_array}")  # Print ETA array
-        print(f"  Cruise Distance Array: {cruise_distance_array}")  # Print cruise distance array
+        print(f"\n时间窗口:")
+        print(f"  窗口大小: {window_seconds:.1f} 秒")
+        print(f"  ETA数组: {eta_array}")  # 打印ETA数组
+        print(f"  巡航距离数组: {cruise_distance_array}")  # 打印巡航距离数组
         print(f"{'='*100}")
     
     return result, min_df, max_df
 
 
-# Usage example
+# 使用示例
 # eta_result, min_profile, max_profile = calculate_eta_window(
 #     origin_fl=370,
 #     target_fl=30,
@@ -165,24 +165,24 @@ import numpy as np
 
 
 def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
-                        standard_route_length, target_eta, tolerance=10.0, max_profiles=5, print_details=False):
+                        standard_route_length, target_eta, tolerance=10.0, max_profiles=5, print_details=True):
     """
-    Intelligent search for descent profile parameters that meet target RTA
+    智能搜索符合目标RTA的下降剖面参数
     
     Parameters:
-    origin_fl: int - Initial flight level
-    target_fl: int - Target flight level
-    aircraft_mass: float - Aircraft mass (kg)
-    ac_model: str - Aircraft model
-    standard_route_length: float - Standard route total length (nm)
-    target_eta: float - Target ETA (seconds)
-    tolerance: float - Allowable ETA error (seconds)
-    max_profiles: int - Maximum number of profiles to return
+    origin_fl: int - 起始高度层
+    target_fl: int - 目标高度层
+    aircraft_mass: float - 飞机重量(kg)
+    ac_model: str - 飞机型号
+    standard_route_length: float - 标准航路总长度(nm)
+    target_eta: float - 目标ETA(秒)
+    tolerance: float - 允许的ETA误差(秒)
+    max_profiles: int - 最多返回的剖面数量
     
     Returns:
-    list - List of descent profile parameters and corresponding ETAs that meet criteria
+    list - 符合条件的下降剖面参数和对应ETA列表
     """
-    # First calculate baseline ETAmin and ETAmax to understand if RTA is within reasonable range
+    # 首先计算基准ETAmin和ETAmax，了解RTA是否在合理范围内
     min_result, min_df, min_decel = calculate_eta_window(
         origin_fl=origin_fl,
         target_fl=target_fl,
@@ -196,37 +196,37 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
     eta_max = min_result["ETAmax"]["total_time_seconds"]
     eta_window = eta_max - eta_min
     
-    print(f"Baseline ETAmin: {eta_min:.1f}s, ETAmax: {eta_max:.1f}s")
-    print(f"ETA Window: {eta_window:.1f}s")
-    print(f"Target RTA: {target_eta:.1f}s, Allowable Error: ±{tolerance:.1f}s")
+    print(f"基准ETAmin: {eta_min:.1f}秒, ETAmax: {eta_max:.1f}秒")
+    print(f"ETA窗口: {eta_window:.1f}秒")
+    print(f"目标RTA: {target_eta:.1f}秒, 允许误差: ±{tolerance:.1f}秒")
     
-    # Check if target RTA is within feasible range
+    # 检查目标RTA是否在可行范围内
     if target_eta < eta_min - tolerance:
-        print(f"Warning: Target RTA is {eta_min - target_eta:.1f}s smaller than minimum ETA")
+        print(f"警告: 目标RTA比最小ETA还小 {eta_min - target_eta:.1f}秒")
         return []
     elif target_eta > eta_max + tolerance:
-        print(f"Warning: Target RTA is {target_eta - eta_max:.1f}s larger than maximum ETA")
+        print(f"警告: 目标RTA比最大ETA还大 {target_eta - eta_max:.1f}秒")
         return []
     
-    # Generate intelligent parameter search space
+    # 生成智能参数搜索空间
     profile_params = generate_profile_params(eta_min, eta_max, target_eta)
     
     if print_details:
-        print(f"\nGenerated {len(profile_params)} parameter combinations for search")
+        print(f"\n生成了 {len(profile_params)} 个参数组合进行搜索")
     
-    print("\nStarting search for descent profiles that meet RTA...\n")
+    print("\n开始搜索符合RTA的下降剖面...\n")
     
-    # Store qualifying profiles
+    # 存储符合条件的剖面
     suitable_profiles = []
     
-    # Calculate actual ETA for each parameter combination
+    # 对每种参数组合计算实际ETA
     for i, params in enumerate(profile_params):
         profile_str = format_profile_string(params)
         if print_details:
-            print(f"Testing profile {i+1}/{len(profile_params)}: {profile_str}")
+            print(f"测试剖面 {i+1}/{len(profile_params)}: {profile_str}")
         
         try:
-            # Calculate descent profile for current parameter combination
+            # 计算当前参数组合的下降剖面
             descent_params = {
                 "cruise_fl": origin_fl,
                 "target_fl": target_fl,
@@ -237,34 +237,34 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
                 "print_details": False
             }
             
-            # Add intermediate altitude and CAS to parameters if present
+            # 如果有中间高度层和CAS，添加到参数中
             if params["intermediate_fl"] is not None and params["intermediate_cas"] is not None:
                 descent_params["intermediate_fl"] = params["intermediate_fl"]
                 descent_params["intermediate_cas"] = params["intermediate_cas"]
             
-            # Calculate descent profile
+            # 计算下降剖面
             summary, df, decel = calculate_descent_profile(**descent_params)
             
-            # Calculate total ETA
+            # 计算总ETA
             descent_distance = summary["Descent Distance (nm)"]
             descent_time = round(summary["Descent Time (s)"], 1)
             
-            # Calculate cruise segment
+            # 计算巡航段
             cruise_distance = standard_route_length - descent_distance
             cruise_tas = Utility.mach2tas_kt(flight_level=origin_fl, mach=params["descent_mach"])
             cruise_gs = round(cruise_tas, 1)
             cruise_time = round(cruise_distance / cruise_gs * 3600, 1)
             
-            # Calculate total ETA
+            # 计算总ETA
             total_eta = round(cruise_time + descent_time, 1)
             
-            # Calculate difference from target ETA
+            # 计算与目标ETA的差值
             eta_diff = abs(total_eta - target_eta)
             
             if print_details:
-                print(f"  ETA: {total_eta:.1f}s, Difference from target: {eta_diff:.1f}s")
+                print(f"  ETA: {total_eta:.1f}秒, 与目标差值: {eta_diff:.1f}秒")
             
-            # Add to qualifying list if within tolerance
+            # 如果在容差范围内，添加到符合条件的列表
             if eta_diff <= tolerance:
                 suitable_profiles.append({
                     "params": params,
@@ -278,19 +278,19 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
                     "fuel_kg": summary["Fuel Consumption (kg)"]
                 })
                 if print_details:
-                    print(f"  ✓ Meets criteria!")
+                    print(f"  ✓ 符合条件!")
             else:
                 if print_details:
-                    print(f"  ✗ Outside tolerance range")
+                    print(f"  ✗ 超出容差范围")
                 
         except Exception as e:
             if print_details:
-                print(f"  Calculation error: {e}")
+                print(f"  计算出错: {e}")
     
-    # Sort by difference from target ETA
+    # 按照与目标ETA的差异排序
     suitable_profiles.sort(key=lambda x: x["diff"])
     
-    # Limit number of returned profiles
+    # 限制返回的剖面数量
     suitable_profiles = suitable_profiles[:max_profiles]
     
     return suitable_profiles
@@ -299,38 +299,38 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
 
 def generate_profile_params(eta_min, eta_max, target_eta):
     """
-    Intelligently generate descent profile parameter combinations based on target ETA position within ETA window
+    智能生成下降剖面参数组合，基于目标ETA在ETA窗口中的位置
     
     Parameters:
-    eta_min: float - Minimum ETA value (seconds)
-    eta_max: float - Maximum ETA value (seconds)
-    target_eta: float - Target ETA (seconds)
+    eta_min: float - 最小ETA值(秒)
+    eta_max: float - 最大ETA值(秒)
+    target_eta: float - 目标ETA(秒)
     
     Returns:
-    list - List of parameter dictionaries
+    list - 参数字典列表
     """
     params_list = []
     
-    # Calculate relative position of target ETA within ETA window (0.0 means close to ETAmin, 1.0 means close to ETAmax)
+    # 计算目标ETA在ETA窗口中的相对位置 (0.0表示接近ETAmin, 1.0表示接近ETAmax)
     relative_position = (target_eta - eta_min) / (eta_max - eta_min)
     
-    # Adjust Mach number and CAS search range based on relative position
+    # 根据相对位置调整马赫数和CAS的搜索范围
     if relative_position < 0.2:
-        # Close to ETAmin, prioritize high Mach numbers and high CAS
+        # 接近ETAmin，优先搜索高马赫数和高CAS
         mach_values = [0.78, 0.79, 0.80]
         cas_ranges = {
             0.78: [290, 295, 300],
             0.79: [295, 300, 305],
             0.80: [300, 305, 310]
         }
-        # Close to ETAmin, intermediate altitude may not be needed
+        # 接近ETAmin时，中间高度层可能不需要
         int_options = [
             (None, None),
             (220, 50),
             (220, 50)
         ]
     elif relative_position < 0.4:
-        # Between ETAmin and midpoint, favor fast profiles
+        # ETAmin和中间点之间，偏向快速剖面
         mach_values = [0.76, 0.77, 0.78, 0.79]
         cas_ranges = {
             0.76: [275, 280, 285],
@@ -344,7 +344,7 @@ def generate_profile_params(eta_min, eta_max, target_eta):
             (220, 60)
         ]
     elif relative_position < 0.6:
-        # Close to midpoint, moderate Mach numbers and CAS
+        # 接近中间点，中等马赫数和CAS
         mach_values = [0.75, 0.76, 0.77]
         cas_ranges = {
             0.75: [265, 270, 275, 280],
@@ -358,7 +358,7 @@ def generate_profile_params(eta_min, eta_max, target_eta):
             (220, 80)
         ]
     elif relative_position < 0.8:
-        # Between midpoint and ETAmax, favor slow profiles
+        # 中间点和ETAmax之间，偏向慢速剖面
         mach_values = [0.74, 0.75, 0.76]
         cas_ranges = {
             0.74: [255, 260, 265],
@@ -372,7 +372,7 @@ def generate_profile_params(eta_min, eta_max, target_eta):
             (220, 100)
         ]
     else:
-        # Close to ETAmax, prioritize low Mach numbers and low CAS
+        # 接近ETAmax，优先搜索低马赫数和低CAS
         mach_values = [0.73, 0.74]
         cas_ranges = {
             0.73: [245, 250, 255],
@@ -386,11 +386,11 @@ def generate_profile_params(eta_min, eta_max, target_eta):
             (220, 150)
         ]
     
-    # Generate parameter combinations
+    # 生成参数组合
     for mach in mach_values:
         for cas in cas_ranges[mach]:
             for int_cas, int_fl in int_options:
-                # Create parameter dictionary
+                # 创建参数字典
                 param = {
                     "descent_mach": mach,
                     "high_cas": cas,
@@ -400,7 +400,7 @@ def generate_profile_params(eta_min, eta_max, target_eta):
                 
                 params_list.append(param)
     
-    # Always add baseline configurations
+    # 始终添加基准配置
     params_list.append({
         "descent_mach": 0.80,
         "high_cas": 310,
@@ -418,7 +418,7 @@ def generate_profile_params(eta_min, eta_max, target_eta):
     return params_list
 
 def format_profile_string(params):
-    """Format parameters into standard descent profile string representation"""
+    """将参数格式化为标准下降剖面字符串表示"""
     mach = params["descent_mach"]
     high_cas = params["high_cas"]
     intermediate_cas = params["intermediate_cas"]
@@ -429,18 +429,18 @@ def format_profile_string(params):
     else:
         return f"{mach:.2f}M/{high_cas}kt/{intermediate_cas}kt@FL{intermediate_fl}"
 
-# Usage example
+# 使用示例
 # if __name__ == "__main__":
-#     # Set parameters
+#     # 设置参数
 #     origin_fl = 370
 #     target_fl = 30
 #     aircraft_mass = 60000
 #     ac_model = "A320-232"
 #     standard_route_length = 200
-#     target_eta = 1900.0  # Target RTA is 1900 seconds
-#     tolerance = 10.0     # Allow 10 seconds error
+#     target_eta = 1900.0  # 目标RTA为1900秒
+#     tolerance = 10.0     # 允许误差10秒
     
-#     # Find descent profiles that meet criteria
+#     # 寻找符合条件的下降剖面
 #     suitable_profiles = find_profile_for_rta(
 #         origin_fl=origin_fl,
 #         target_fl=target_fl,
@@ -452,34 +452,34 @@ def format_profile_string(params):
 #          print_details=True
 #     )
     
-#     # Display results
+#     # 显示结果
 #     print(f"\n{'='*80}")
-#     print(f"Found {len(suitable_profiles)} descent profiles that meet target RTA:")
+#     print(f"找到 {len(suitable_profiles)} 个符合目标RTA的下降剖面:")
 #     print(f"{'='*80}")
     
 #     for i, profile in enumerate(suitable_profiles):
 #         params = profile["params"]
-#         print(f"\n{i+1}. Descent Profile: {profile['profile_str']}")
-#         print(f"   ETA: {profile['eta']:.1f}s (Difference from target: {profile['diff']:.1f}s)")
-#         print(f"   Cruise Mach: {params['descent_mach']:.2f}M")
-#         print(f"   Cruise Distance: {profile['cruise_distance']:.1f} nm")
-#         print(f"   Cruise Time: {profile['cruise_time']:.1f} seconds")
-#         print(f"   Descent Distance: {profile['descent_distance']:.1f} nm")
-#         print(f"   Descent Time: {profile['descent_time']:.1f} seconds")
-#         print(f"   Fuel Consumption: {profile['fuel_kg']:.1f} kg")
+#         print(f"\n{i+1}. 下降剖面: {profile['profile_str']}")
+#         print(f"   ETA: {profile['eta']:.1f}秒 (与目标差异: {profile['diff']:.1f}秒)")
+#         print(f"   巡航马赫数: {params['descent_mach']:.2f}M")
+#         print(f"   巡航距离: {profile['cruise_distance']:.1f} nm")
+#         print(f"   巡航时间: {profile['cruise_time']:.1f} 秒")
+#         print(f"   下降距离: {profile['descent_distance']:.1f} nm")
+#         print(f"   下降时间: {profile['descent_time']:.1f} 秒")
+#         print(f"   燃油消耗: {profile['fuel_kg']:.1f} kg")
     
 #     print(f"\n{'='*80}")
     
-#     # Save results as arrays
+#     # 将结果保存为数组
 #     if suitable_profiles:
 #         eta_array = [profile["eta"] for profile in suitable_profiles]
-#         print(f"Qualifying ETA array: {eta_array}")
+#         print(f"符合条件的ETA数组: {eta_array}")
         
 #         profile_array = [profile["profile_str"] for profile in suitable_profiles]
-#         print(f"Qualifying profile array: {profile_array}")
+#         print(f"符合条件的剖面数组: {profile_array}")
         
-#         # Save parameters of first best matching profile
+#         # 保存第一个最佳匹配剖面的参数
 #         best_profile = suitable_profiles[0]["params"]
-#         print(f"Best matching profile parameters: {best_profile}")
+#         print(f"最佳匹配剖面参数: {best_profile}")
 #     else:
-#         print("No descent profiles found that meet criteria")
+#         print("未找到符合条件的下降剖面")
