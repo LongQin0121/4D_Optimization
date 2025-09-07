@@ -575,13 +575,14 @@ def calculate_descent_profile(cruise_fl, target_fl, aircraft_mass, ac_model,
 # ======================== 使用示例 ========================
 
 # 示例: 0.73M/270kt，中间减速到220kt@FL50
-summary, df, decel_segments = calculate_descent_profile(
-    cruise_fl=370,
-    target_fl=30,
-    aircraft_mass=60000,
-    ac_model="A320-232",
-    descent_mach=0.73,
-    high_cas=270,
-    intermediate_cas=220, 
-    intermediate_fl=50
-)
+# summary, df, decel_segments = calculate_descent_profile(
+#     cruise_fl=370,
+#     target_fl=30,
+#     aircraft_mass=60000,
+#     ac_model="A320-232",
+#     descent_mach=0.73,
+#     high_cas=270,
+#     intermediate_cas=220, 
+#     intermediate_fl=50,
+#     print_details=True
+# )

@@ -163,6 +163,10 @@ from bada_dis_time import calculate_descent_profile
 import Utility
 import numpy as np
 
+from bada_dis_time import calculate_descent_profile
+import Utility
+import numpy as np
+
 
 def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
                         standard_route_length, target_eta, tolerance=10.0, max_profiles=5, print_details=True):
@@ -180,7 +184,7 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
     max_profiles: int - 最多返回的剖面数量
     
     Returns:
-    list - 符合条件的下降剖面参数和对应ETA列表
+    list - 符合条件的下降剖面参数和对应ETA列表，包含完整的summary, df, decel信息
     """
     # 首先计算基准ETAmin和ETAmax，了解RTA是否在合理范围内
     min_result, min_df, min_decel = calculate_eta_window(
@@ -213,7 +217,6 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
     
     if print_details:
         print(f"\n生成了 {len(profile_params)} 个参数组合进行搜索")
-    
     print("\n开始搜索符合RTA的下降剖面...\n")
     
     # 存储符合条件的剖面
@@ -242,7 +245,7 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
                 descent_params["intermediate_fl"] = params["intermediate_fl"]
                 descent_params["intermediate_cas"] = params["intermediate_cas"]
             
-            # 计算下降剖面
+            # 计算下降剖面 - 保存完整的三个返回值
             summary, df, decel = calculate_descent_profile(**descent_params)
             
             # 计算总ETA
@@ -264,18 +267,30 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
             if print_details:
                 print(f"  ETA: {total_eta:.1f}秒, 与目标差值: {eta_diff:.1f}秒")
             
-            # 如果在容差范围内，添加到符合条件的列表
+            # 如果在容差范围内，添加到符合条件的列表 - 现在包含完整信息
             if eta_diff <= tolerance:
                 suitable_profiles.append({
+                    # 基本参数信息
                     "params": params,
                     "profile_str": profile_str,
+                    
+                    # ETA相关信息
                     "eta": total_eta,
                     "diff": eta_diff,
-                    "descent_distance": descent_distance,
                     "descent_time": descent_time,
-                    "cruise_distance": cruise_distance,
                     "cruise_time": cruise_time,
-                    "fuel_kg": summary["Fuel Consumption (kg)"]
+                    
+                    # 距离信息
+                    "descent_distance": descent_distance,
+                    "cruise_distance": cruise_distance,
+                    
+                    # 燃油消耗
+                    "fuel_kg": summary["Fuel Consumption (kg)"],
+                    
+                    # 完整的计算结果 - 新增
+                    "summary": summary,       # 完整的汇总信息
+                    "df": df.copy(),         # 详细的逐点计算数据 (复制以避免引用问题)
+                    "decel": decel           # 减速信息
                 })
                 if print_details:
                     print(f"  ✓ 符合条件!")
@@ -296,19 +311,65 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
     return suitable_profiles
 
 
+def get_best_profile_details(suitable_profiles):
+    """
+    获取最佳匹配剖面的详细信息
+    
+    Parameters:
+    suitable_profiles: list - find_profile_for_rta返回的剖面列表
+    
+    Returns:
+    dict - 最佳剖面的完整信息，如果没有符合条件的剖面则返回None
+    """
+    if not suitable_profiles:
+        return None
+    
+    # 第一个就是最佳匹配的（已按diff排序）
+    best_profile = suitable_profiles[0]
+    
+    return {
+        "profile_str": best_profile["profile_str"],
+        "params": best_profile["params"],
+        "eta": best_profile["eta"],
+        "diff": best_profile["diff"],
+        "summary": best_profile["summary"],
+        "df": best_profile["df"],
+        "decel": best_profile["decel"]
+    }
 
+
+def print_suitable_profiles_summary(suitable_profiles):
+    """
+    打印符合条件剖面的汇总信息
+    
+    Parameters:
+    suitable_profiles: list - find_profile_for_rta返回的剖面列表
+    """
+    if not suitable_profiles:
+        print("没有找到符合条件的剖面")
+        return
+    
+    print(f"\n找到 {len(suitable_profiles)} 个符合条件的剖面:")
+    profile_names = [profile["profile_str"] for profile in suitable_profiles]
+    print(f"符合条件的剖面数组: {profile_names}")
+    
+    # 显示最佳匹配剖面
+    best_profile = suitable_profiles[0]
+    print(f"\n最佳匹配剖面: {best_profile['profile_str']}")
+    print(f"最佳匹配剖面参数: {best_profile['params']}")
+    print(f"ETA: {best_profile['eta']:.1f}秒, 误差: {best_profile['diff']:.1f}秒")
+    print(f"燃油消耗: {best_profile['fuel_kg']:.1f}kg")
+    
+    # 提示可以获取详细信息
+    print(f"\n提示: 可以通过 suitable_profiles[0]['summary']、suitable_profiles[0]['df']、suitable_profiles[0]['decel'] 获取详细计算结果")
+
+
+# 其他函数保持不变...
 def generate_profile_params(eta_min, eta_max, target_eta):
     """
     智能生成下降剖面参数组合，基于目标ETA在ETA窗口中的位置
-    
-    Parameters:
-    eta_min: float - 最小ETA值(秒)
-    eta_max: float - 最大ETA值(秒)
-    target_eta: float - 目标ETA(秒)
-    
-    Returns:
-    list - 参数字典列表
     """
+    # ... 保持原有代码不变
     params_list = []
     
     # 计算目标ETA在ETA窗口中的相对位置 (0.0表示接近ETAmin, 1.0表示接近ETAmax)
@@ -430,56 +491,37 @@ def format_profile_string(params):
         return f"{mach:.2f}M/{high_cas}kt/{intermediate_cas}kt@FL{intermediate_fl}"
 
 # 使用示例
-# if __name__ == "__main__":
-#     # 设置参数
-#     origin_fl = 370
-#     target_fl = 30
-#     aircraft_mass = 60000
-#     ac_model = "A320-232"
-#     standard_route_length = 200
-#     target_eta = 1900.0  # 目标RTA为1900秒
-#     tolerance = 10.0     # 允许误差10秒
+if __name__ == "__main__":
+    # 设置参数
+    origin_fl = 370
+    target_fl = 30
+    aircraft_mass = 60000
+    ac_model = "A320-232"
+    standard_route_length = 200
+    target_eta = 1900.0  # 目标RTA为1900秒
+    tolerance = 10.0     # 允许误差10秒
     
-#     # 寻找符合条件的下降剖面
-#     suitable_profiles = find_profile_for_rta(
-#         origin_fl=origin_fl,
-#         target_fl=target_fl,
-#         aircraft_mass=aircraft_mass,
-#         ac_model=ac_model,
-#         standard_route_length=standard_route_length,
-#         target_eta=target_eta,
-#         tolerance=tolerance,
-#          print_details=True
-#     )
+    # 寻找符合条件的下降剖面
+    suitable_profiles = find_profile_for_rta(
+        origin_fl=origin_fl,
+        target_fl=target_fl,
+        aircraft_mass=aircraft_mass,
+        ac_model=ac_model,
+        standard_route_length=standard_route_length,
+        target_eta=target_eta,
+        tolerance=tolerance,
+        print_details=True
+    )
     
-#     # 显示结果
-#     print(f"\n{'='*80}")
-#     print(f"找到 {len(suitable_profiles)} 个符合目标RTA的下降剖面:")
-#     print(f"{'='*80}")
+    # 打印汇总信息
+    print_suitable_profiles_summary(suitable_profiles)
     
-#     for i, profile in enumerate(suitable_profiles):
-#         params = profile["params"]
-#         print(f"\n{i+1}. 下降剖面: {profile['profile_str']}")
-#         print(f"   ETA: {profile['eta']:.1f}秒 (与目标差异: {profile['diff']:.1f}秒)")
-#         print(f"   巡航马赫数: {params['descent_mach']:.2f}M")
-#         print(f"   巡航距离: {profile['cruise_distance']:.1f} nm")
-#         print(f"   巡航时间: {profile['cruise_time']:.1f} 秒")
-#         print(f"   下降距离: {profile['descent_distance']:.1f} nm")
-#         print(f"   下降时间: {profile['descent_time']:.1f} 秒")
-#         print(f"   燃油消耗: {profile['fuel_kg']:.1f} kg")
-    
-#     print(f"\n{'='*80}")
-    
-#     # 将结果保存为数组
-#     if suitable_profiles:
-#         eta_array = [profile["eta"] for profile in suitable_profiles]
-#         print(f"符合条件的ETA数组: {eta_array}")
+    # 获取最佳剖面的详细信息
+    best_profile_details = get_best_profile_details(suitable_profiles)
+    if best_profile_details:
+        print(f"\n最佳剖面的详细summary: {best_profile_details['summary']}")
+        print(f"最佳剖面的df数据框形状: {best_profile_details['df'].shape}")
+        print(f"最佳剖面的decel信息: {best_profile_details['decel']}")
         
-#         profile_array = [profile["profile_str"] for profile in suitable_profiles]
-#         print(f"符合条件的剖面数组: {profile_array}")
-        
-#         # 保存第一个最佳匹配剖面的参数
-#         best_profile = suitable_profiles[0]["params"]
-#         print(f"最佳匹配剖面参数: {best_profile}")
-#     else:
-#         print("未找到符合条件的下降剖面")
+        # 如果需要查看详细的df内容
+        # print(f"\n详细的df数据:\n{best_profile_details['df']}")
