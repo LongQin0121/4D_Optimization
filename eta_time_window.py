@@ -30,14 +30,16 @@ suitable_profiles = A320.find_profile_for_rta(
         aircraft_mass=60000,
         ac_model="A320-232",
         standard_route_length=200,
-        target_eta=1900,
+        target_eta=1910,
         tolerance=10,
-        print_details=False       # Testing profile 38/42: 0.77M/285kt/220kt@FL50   ETA: 1844.9s, Difference from target: 55.1s
+        print_details=True      # Testing profile 38/42: 0.77M/285kt/220kt@FL50   ETA: 1844.9s, Difference from target: 55.1s
     )
 
 params_rta = suitable_profiles[0]["params"]
 print(params_rta)
-
+print(suitable_profiles[0]['eta'])
+print(suitable_profiles[0]['cruise_distance'])
+print(suitable_profiles[0]['cruise_time'])
 
 ##############################
 #
@@ -74,12 +76,35 @@ summary, df, decel_segments = calculate_descent_profile(
 
 print(summary['Profile'])  #  'Descent Distance (nm)'   , 'Descent Time (s)' ,      'Fuel Consumption (kg)'
 
-print(df.columns)    
-
+  
+#############################################
+    #  print(df.columns)  
+    #  df.columns:
     #  Index(['FL', 'Altitude(ft)', 'Speed Mode', 'Mach', 'CAS(kt)', 'TAS(kt)',
     #    'Descent Rate(ft/min)', 'Descent Rate(m/s)', 'Descent Angle(deg)',
     #    'Descent Gradient(%)', 'Alt-Dist Ratio(ft/nm)', 'ESF', 'Drag(N)',
     #    'Idle Thrust(N)', 'Fuel Flow(kg/h)', 'Fuel Flow(kg/s)',
     #    'Lift Coefficient', 'Drag Coefficient', 'Is Deceleration Point',
     #    'Cumulative Distance(nm)', 'Cumulative Time(s)', 'Cumulative Fuel(kg)'],
-    #   dtype='object')
+    #     dtype='object')
+    #
+#############################################
+
+eta = suitable_profiles[0]['eta']
+cruise_distance = suitable_profiles[0]['cruise_distance'] 
+cruise_time = suitable_profiles[0]['cruise_time']
+
+import matplotlib.pyplot as plt
+
+# fig, ax1, ax2 = Utility.plot_from_summary_and_df_with_dual_xaxis(summary, df, standard_route_length=200, figsize=(10, 8))
+# plt.show()
+
+fig, ax1, ax2 = Utility.plot_from_summary_and_df_with_dual_xaxis(
+    summary, df, 
+    standard_route_length=200, 
+    cruise_distance=cruise_distance,
+    cruise_time=cruise_time,
+    eta=eta,
+    figsize=(10, 8)
+)
+plt.show()

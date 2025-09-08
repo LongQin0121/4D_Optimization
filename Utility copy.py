@@ -30,9 +30,9 @@ def mach2tas_kt(flight_level, mach, delta_temp=0):
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 def plot_descent_profile_with_dual_xaxis(standard_route_length, descent_distance, cumulative_distance, 
                                         altitude_ft, cumulative_time, mach, cas_kt, tas_kt, 
-                                        cruise_distance=None, cruise_time=None, eta=None,
                                         cruise_fl=370, figsize=(12, 10)):
     """
     绘制飞机下降轨迹图（双x轴：距离和时间）
@@ -41,9 +41,8 @@ def plot_descent_profile_with_dual_xaxis(standard_route_length, descent_distance
     # Create figure with subplots
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize, sharex=True)
     
-    # Calculate cruise distance (如果没有提供，使用默认计算)
-    if cruise_distance is None:
-        cruise_distance = standard_route_length - descent_distance
+    # Calculate cruise distance
+    cruise_distance = standard_route_length - descent_distance
     
     # Create distance array for cruise segment
     cruise_x = np.array([-standard_route_length, -descent_distance])
@@ -80,30 +79,6 @@ def plot_descent_profile_with_dual_xaxis(standard_route_length, descent_distance
     time_positions = []
     time_labels = []
     
-    # 添加巡航段时间点（如果提供了巡航时间信息）
-   # 添加巡航段时间点（如果提供了巡航时间信息）
-    if cruise_time is not None and eta is not None:
-        # 在巡航段添加更多时间点（匀速）
-        # 从-200到TOD点，每25海里一个点
-        cruise_positions = []
-        for dist in range(int(-standard_route_length), int(-descent_distance), 25):
-            cruise_positions.append(dist)
-        
-        # 确保包含起点和终点
-        cruise_positions = [-standard_route_length] + cruise_positions + [-descent_distance]
-        # 去除重复
-        cruise_positions = sorted(list(set(cruise_positions)))
-        
-        for pos in cruise_positions:
-            if pos >= -standard_route_length and pos <= -descent_distance:
-                # 计算这个位置对应的时间
-                distance_from_start = pos + standard_route_length  # 从起点的距离 (0到cruise_distance)
-                time_from_start = (distance_from_start / cruise_distance) * cruise_time
-                relative_cruise_time = time_from_start - eta  # 相对于目标点的时间
-                
-                time_positions.append(pos)
-                time_labels.append(f'{relative_cruise_time:.0f}')
-        
     # 1. 第一个点（下降开始）
     first_idx = 0
     time_positions.append(descent_x.iloc[first_idx])
@@ -171,11 +146,10 @@ def plot_descent_profile_with_dual_xaxis(standard_route_length, descent_distance
                 bbox=dict(boxstyle="round,pad=0.3", facecolor="lightcoral", alpha=0.7),
                 arrowprops=dict(arrowstyle='->', color='red', alpha=0.7))
     
-    # 其他标注（增加巡航时间信息）
+    # 其他标注
     cruise_mid_x = (-standard_route_length + -descent_distance) / 2
-    cruise_time_text = f'\n{cruise_time:.0f}s' if cruise_time else ''
     ax1.text(cruise_mid_x, cruise_fl * 100 - 12000, 
-            f'Cruise: {cruise_distance:.1f} nm{cruise_time_text}', 
+            f'Cruise: {cruise_distance:.1f} nm', 
             ha='center', va='bottom', fontsize=10,
             bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.7))
     
@@ -186,20 +160,11 @@ def plot_descent_profile_with_dual_xaxis(standard_route_length, descent_distance
             ha='center', va='center', fontsize=10,
             bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.7))
     
-    # ETA标注（如果提供）
-    if eta is not None:
-        ax1.text(-standard_route_length + 10, cruise_fl * 100 - 3000, 
-                f'Total ETA: {eta:.0f}s', 
-                ha='left', va='bottom', fontsize=10,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue", alpha=0.7))
-    
     plt.tight_layout()
     
     return fig, ax1, ax2
 
-def plot_from_summary_and_df_with_dual_xaxis(summary, df, standard_route_length=200, 
-                                            cruise_distance=None, cruise_time=None, eta=None,
-                                            cruise_fl=370, figsize=(12, 10)):
+def plot_from_summary_and_df_with_dual_xaxis(summary, df, standard_route_length=200, cruise_fl=370, figsize=(12, 10)):
     """
     直接从summary和df绘制图表的便捷函数（双x轴）
     """
@@ -213,9 +178,6 @@ def plot_from_summary_and_df_with_dual_xaxis(summary, df, standard_route_length=
         mach=df['Mach'],
         cas_kt=df['CAS(kt)'],
         tas_kt=df['TAS(kt)'],
-        cruise_distance=cruise_distance,
-        cruise_time=cruise_time,
-        eta=eta,
         cruise_fl=cruise_fl,
         figsize=figsize
     )
