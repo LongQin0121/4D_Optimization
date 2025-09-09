@@ -131,8 +131,8 @@ def plot_descent_profile_with_dual_xaxis(standard_route_length, descent_distance
     time_positions, time_labels = zip(*sorted_pairs)
     
     # 调试：打印时间轴刻度位置
-    print("时间轴刻度位置：", time_positions)
-    print("时间轴刻度标签：", time_labels)
+    # print("时间轴刻度位置：", time_positions)
+    # print("时间轴刻度标签：", time_labels)
     
     # 设置时间轴刻度 - 确保精确对应
     ax1_time.set_xticks(time_positions)

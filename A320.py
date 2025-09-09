@@ -165,7 +165,7 @@ import numpy as np
 
 
 def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
-                        standard_route_length, target_eta, tolerance=10.0, max_profiles=5, print_details=False):
+                        standard_route_length, rta, tolerance=10.0, max_profiles=5, print_details=False):
     """
     Intelligent search for descent profile parameters that meet target RTA
     
@@ -175,7 +175,7 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
     aircraft_mass: float - Aircraft mass (kg)
     ac_model: str - Aircraft model
     standard_route_length: float - Standard route total length (nm)
-    target_eta: float - Target ETA (seconds)
+    rta: float - Target ETA (seconds)
     tolerance: float - Allowable ETA error (seconds)
     max_profiles: int - Maximum number of profiles to return
     
@@ -198,18 +198,18 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
     
     print(f"Baseline ETAmin: {eta_min:.1f}s, ETAmax: {eta_max:.1f}s")
     print(f"ETA Window: {eta_window:.1f}s")
-    print(f"Target RTA: {target_eta:.1f}s, Allowable Error: ±{tolerance:.1f}s")
+    print(f"Target RTA: {rta:.1f}s, Allowable Error: ±{tolerance:.1f}s")
     
     # Check if target RTA is within feasible range
-    if target_eta < eta_min - tolerance:
-        print(f"Warning: Target RTA is {eta_min - target_eta:.1f}s smaller than minimum ETA")
+    if rta < eta_min - tolerance:
+        print(f"Warning: Target RTA is {eta_min - rta:.1f}s smaller than minimum ETA")
         return []
-    elif target_eta > eta_max + tolerance:
-        print(f"Warning: Target RTA is {target_eta - eta_max:.1f}s larger than maximum ETA")
+    elif rta > eta_max + tolerance:
+        print(f"Warning: Target RTA is {rta - eta_max:.1f}s larger than maximum ETA")
         return []
     
     # Generate intelligent parameter search space
-    profile_params = generate_profile_params(eta_min, eta_max, target_eta)
+    profile_params = generate_profile_params(eta_min, eta_max, rta)
     
     if print_details:
         print(f"\nGenerated {len(profile_params)} parameter combinations for search")
@@ -259,7 +259,7 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
             total_eta = round(cruise_time + descent_time, 1)
             
             # Calculate difference from target ETA
-            eta_diff = abs(total_eta - target_eta)
+            eta_diff = abs(total_eta - rta)
             
             if print_details:
                 print(f"  ETA: {total_eta:.1f}s, Difference from target: {eta_diff:.1f}s")
@@ -297,14 +297,14 @@ def find_profile_for_rta(origin_fl, target_fl, aircraft_mass, ac_model,
 
 
 
-def generate_profile_params(eta_min, eta_max, target_eta):
+def generate_profile_params(eta_min, eta_max, rta):
     """
     Intelligently generate descent profile parameter combinations based on target ETA position within ETA window
     
     Parameters:
     eta_min: float - Minimum ETA value (seconds)
     eta_max: float - Maximum ETA value (seconds)
-    target_eta: float - Target ETA (seconds)
+    rta: float - Target ETA (seconds)
     
     Returns:
     list - List of parameter dictionaries
@@ -312,7 +312,7 @@ def generate_profile_params(eta_min, eta_max, target_eta):
     params_list = []
     
     # Calculate relative position of target ETA within ETA window (0.0 means close to ETAmin, 1.0 means close to ETAmax)
-    relative_position = (target_eta - eta_min) / (eta_max - eta_min)
+    relative_position = (rta - eta_min) / (eta_max - eta_min)
     
     # Adjust Mach number and CAS search range based on relative position
     if relative_position < 0.2:
@@ -437,7 +437,7 @@ def format_profile_string(params):
 #     aircraft_mass = 60000
 #     ac_model = "A320-232"
 #     standard_route_length = 200
-#     target_eta = 1900.0  # Target RTA is 1900 seconds
+#     rta = 1900.0  # Target RTA is 1900 seconds
 #     tolerance = 10.0     # Allow 10 seconds error
     
 #     # Find descent profiles that meet criteria
@@ -447,7 +447,7 @@ def format_profile_string(params):
 #         aircraft_mass=aircraft_mass,
 #         ac_model=ac_model,
 #         standard_route_length=standard_route_length,
-#         target_eta=target_eta,
+#         rta=rta,
 #         tolerance=tolerance,
 #          print_details=True
 #     )

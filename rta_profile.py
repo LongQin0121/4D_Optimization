@@ -1,46 +1,21 @@
+from eta_window import origin_fl, target_fl, aircraft_mass, standard_route_length, ac_model, tolerance   
 from bada_dis_time import calculate_descent_profile
 import matplotlib.pyplot as plt
 import Utility 
 import A320
-
-#############################################
-##    Step 1: Define teh hyperparameters   ##
-#############################################
-
-origin_fl = 390
-target_fl = 30
-aircraft_mass = 60000   # MLW: 64500 kg
-ac_model = "A320-232"
-standard_route_length = 200
-tolerance = 10.0     # error: 10 seconds    
+# MLW: 64500 kg,l = "A320-232"
 
 
-#############################################
-##  Step 2: Calculate the ETA window       ##
-#############################################
-
-eta_window_all, min_profile, max_profile = A320.calculate_eta_window(
-    origin_fl=origin_fl ,
-    target_fl=target_fl ,
-    aircraft_mass=aircraft_mass ,
-    ac_model=ac_model,
-    standard_route_length=standard_route_length ,
-    print_details=False    #   Print details about the ETAmin and ETAmax
-)
-eta_window = eta_window_all['window']['eta_array']
-print("ETA Window:", list(map(float, eta_window )),"seconds")
-
-
-#############################################
-##  Step 3: Descide RTA                    ##
-#############################################
+###############################################
+##  Step 3: Descide RTA within ETA window    ##
+###############################################
 
 rta=1896
+
 
 #####################################################
 ##  Step 4: Find the profile that meet the RTA     ##
 #####################################################
-
 
 suitable_profiles = A320.find_profile_for_rta(
         origin_fl=origin_fl,
@@ -58,7 +33,6 @@ eta = suitable_profiles[0]['eta']
 cruise_distance = suitable_profiles[0]['cruise_distance'] 
 cruise_time = suitable_profiles[0]['cruise_time']
 
-
 print(
     f"Selected Profile: {params_rta}.\n"
     f"The estimated time of arrival (ETA) for Selected Profile is {suitable_profiles[0]['eta']} seconds.\n"
@@ -71,8 +45,6 @@ print(
 ##  Step 5: Calculate the profile details of the ETA that meets the RTA    ##
 #############################################################################
 
-
-
 summary, df, decel_segments = calculate_descent_profile(
     cruise_fl=origin_fl,           
     target_fl=target_fl,             #
@@ -84,7 +56,6 @@ summary, df, decel_segments = calculate_descent_profile(
     intermediate_fl=params_rta['intermediate_fl'],
     print_details=False        # print details of summary, df, decel_segments
 )
-
 
 
 ########################################################################
@@ -100,4 +71,5 @@ fig, ax1, ax2 = Utility.plot_from_summary_and_df_with_dual_xaxis(
     cruise_fl = origin_fl,
     figsize=(10, 8)
 )
+# plt.savefig("descent_profile.pdf", format="pdf", bbox_inches="tight")
 plt.show()
