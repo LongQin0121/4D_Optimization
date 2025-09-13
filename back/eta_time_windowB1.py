@@ -79,7 +79,7 @@ summary, df, decel_segments = calculate_descent_profile(
     print_details=False        # print details of summary, df, decel_segments
 )
 
-# print(summary['Profile'])  #  'Descent Distance (nm)'   , 'Descent Time (s)' ,      'Fuel Consumption (kg)'
+print(summary['Profile'])  #  'Descent Distance (nm)'   , 'Descent Time (s)' ,      'Fuel Consumption (kg)'
 
   
 #############################################

@@ -7,7 +7,7 @@ import A320
 ##    Step 1: Define the hyperparameters   ##
 #############################################
 
-origin_fl = 390          # FL
+origin_fl = 370          # FL
 target_fl = 30
 aircraft_mass = 60000   # MLW: 64500 kg
 ac_model = "A320-232"

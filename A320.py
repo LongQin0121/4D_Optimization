@@ -361,8 +361,8 @@ def generate_profile_params(eta_min, eta_max, rta):
         # Between midpoint and ETAmax, favor slow profiles
         mach_values = [0.74, 0.75, 0.76]
         cas_ranges = {
-            0.74: [255, 260, 265],
-            0.75: [260, 265, 270],
+            0.74: [250,255, 260],
+            0.75: [255, 260, 265],
             0.76: [265, 270, 275]
         }
         int_options = [
@@ -383,6 +383,7 @@ def generate_profile_params(eta_min, eta_max, rta):
             (220, 80),
             (220, 100),
             (220, 120),
+            (220, 130),
             (220, 150)
         ]
     
