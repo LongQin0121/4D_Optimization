@@ -94,3 +94,84 @@ dV_CAS/dt = √σ·dV_TAS/dt + V_TAS·(d√σ/dh)·(dh/dt)
 方法2通过模拟预测和数值微分来估计CAS减速率
 
 这种共同基础解释了为什么两种方法在大多数情况下给出相似的结果，因为它们使用相同的物理模型计算基础的TAS减速率，只是从TAS减速率到CAS减速率的转换方法不同。Retry
+
+
+## 等CAS飞行ESF值的反向推导过程
+https://eurocontrol-bada.github.io/pybada/_modules/pyBADA/aircraft.html#Airplane.esf
+ def esf(**kwargs):
+        """Computes the energy share factor based on flight conditions.
+
+
+反向推导的目标是：**找到使得 CAS 保持恒定 (dCAS/dt = 0) 的 ESF 值**。
+
+---
+
+### 推导步骤
+
+1. **从能量平衡方程开始**  
+
+   能量平衡方程：
+   \[
+   m \cdot v \cdot \frac{dv}{dt} + m \cdot g \cdot \frac{dh}{dt} = (T - D) \cdot v
+   \]
+
+2. **引入 ESF 定义**  
+
+   ESF 定义了能量分配给高度变化的比例：
+   \[
+   ESF = \frac{m \cdot g \cdot \frac{dh}{dt}}{(T - D) \cdot v}
+   \]
+
+3. **考虑 CAS 与 TAS 关系**  
+
+   从 CAS 和 TAS 的关系导出：
+   \[
+   \frac{dCAS}{dt} = \sqrt{\sigma} \cdot \frac{dTAS}{dt} + TAS \cdot \frac{d\sqrt{\sigma}}{dh} \cdot \frac{dh}{dt}
+   \]
+
+4. **设置目标条件 \( dCAS/dt = 0 \)**  
+
+   当 CAS 保持恒定时：
+   \[
+   \sqrt{\sigma} \cdot \frac{dTAS}{dt} + TAS \cdot \frac{d\sqrt{\sigma}}{dh} \cdot \frac{dh}{dt} = 0
+   \]
+
+5. **求解 \( dTAS/dt \) 表达式**  
+
+   \[
+   \frac{dTAS}{dt} = - \frac{TAS \cdot \frac{d\sqrt{\sigma}}{dh} \cdot \frac{dh}{dt}}{\sqrt{\sigma}}
+   \]
+
+6. **代入能量平衡方程并求解 ESF**  
+
+   将 \( dTAS/dt \) 代入能量方程并化简，得到代码中的形式：  
+   \[
+   ESF = \frac{1}{1 + A + B \cdot C}
+   \]
+
+---
+
+### 公式中各部分的物理意义
+
+- **A 项**：表示温度梯度对大气密度变化的影响  
+- **B 项**：与马赫数相关的压缩性效应  
+- **C 项**：马赫数效应对密度比变化的影响  
+
+---
+
+### 数学过程的特点
+
+- **复杂的微分方程**  
+  - 涉及偏微分方程和热力学关系  
+  - 需要考虑大气模型的特性  
+
+- **理论简化**  
+  - 基于标准大气模型  
+  - 假设理想气体行为  
+
+- **不同大气层的处理**  
+  - 对流层内外采用不同公式（代码中有条件判断）  
+
+---
+
+这种反向推导方法是飞行性能建模的核心技术，确保飞机能够按照预期的飞行模式（如等 CAS 下降）飞行，同时准确预测其性能参数。
